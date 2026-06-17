@@ -1,0 +1,8 @@
+# Runtime deps for the Vercel serverless API (read/chat endpoints).
+# The full dev setup (tests/lint) uses pyproject.toml: pip install -e ".[dev]".
+httpx>=0.27
+pydantic>=2.7
+pydantic-settings>=2.3
+openai>=1.40
+psycopg[binary]>=3.2
+fastapi>=0.111

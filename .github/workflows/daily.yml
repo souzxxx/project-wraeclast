@@ -1,23 +1,50 @@
-name: Daily collection (alternative to Cloudflare Cron)
+name: Daily collection
 
-# Use EITHER this or the Cloudflare Worker, not both.
-# Requires repo secrets: BACKEND_URL, INTERNAL_RUN_TOKEN.
+# Runs the Python collectors directly (ninja → build → scraper → curate → report) on a
+# schedule, writes to Neon, and commits the day's report. This is the heavy job that does
+# NOT fit a serverless function's time limit, so it lives here, not on Vercel.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   NEON_DATABASE_URL, GLM_API_KEY, EMBEDDINGS_API_KEY (if separate), POE2_LEAGUE,
+#   NINJA_ACCOUNT, NINJA_CHARACTER, NINJA_BASE_URL, NINJA_ECONOMY_PATH, NINJA_ITEM_PATH
 
 on:
   schedule:
     - cron: "0 4 * * *"   # 04:00 UTC daily
-  workflow_dispatch:
+  workflow_dispatch:       # manual "Run workflow" button
+
+permissions:
+  contents: write          # to commit the daily report
 
 jobs:
-  trigger:
+  collect:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger backend daily run
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
         run: |
-          curl -sS -X POST "${BACKEND_URL}/internal/run" \
-            -H "x-run-token: ${INTERNAL_RUN_TOKEN}" \
-            -H "user-agent: Project-Wraeclast-Cron/0.1" \
-            --fail-with-body
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Run daily collection
         env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          INTERNAL_RUN_TOKEN: ${{ secrets.INTERNAL_RUN_TOKEN }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
+          EMBEDDINGS_API_KEY: ${{ secrets.EMBEDDINGS_API_KEY }}
+          POE2_LEAGUE: ${{ secrets.POE2_LEAGUE }}
+          NINJA_ACCOUNT: ${{ secrets.NINJA_ACCOUNT }}
+          NINJA_CHARACTER: ${{ secrets.NINJA_CHARACTER }}
+          NINJA_BASE_URL: ${{ secrets.NINJA_BASE_URL }}
+          NINJA_ECONOMY_PATH: ${{ secrets.NINJA_ECONOMY_PATH }}
+          NINJA_ITEM_PATH: ${{ secrets.NINJA_ITEM_PATH }}
+          OBSIDIAN_VAULT_DIR: reports
+        run: python -m collector.run_daily
+      - name: Commit daily report
+        run: |
+          git config user.name "wraeclast-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add reports/ || true
+          git diff --cached --quiet || git commit -m "chore: daily report $(date -u +%F)"
+          git push || true

@@ -17,20 +17,25 @@ ingest daily, embed, and at question time retrieve what's relevant + the profile
 ## Architecture
 
 ```
- CRON (Cloudflare Worker) ──POST /internal/run──► FastAPI backend
-                                                      │
-   ninja (economy) ─┐                                 │ runs collector.run_daily
-   ninja (build)  ──┼─► normalize ─► Neon (Postgres + pgvector)  ◄── source of truth
-   reddit (scraper)─┘        embeddings ▲   │
-                                        │   ├─► [farm]  ranking by profit/hour
-                            GLM curation┘   ├─► [build] diff vs meta
-                                            ├─► [chat]  RAG + profile
-                                            └─► [site]  Next.js + Obsidian export
+ GitHub Actions (daily) ── runs collector.run_daily directly ──┐
+                                                                ▼
+   ninja (economy) ─┐                          Neon (Postgres + pgvector) ◄── source of truth
+   ninja (build)  ──┼─► normalize ─► embed ─►        │
+   reddit (scraper)─┘        GLM curation ─►         │
+                                                     ▼
+                               Vercel: Next.js site + Python serverless API
+                                  ├─► [farm]  ranking by profit/hour
+                                  ├─► [build] diff vs meta
+                                  ├─► [chat]  RAG + profile
+                                  └─► [site]  state of the league today
 ```
+
+Heavy collection runs in GitHub Actions (no execution-time limit); the light read/chat API
+runs as a Vercel Python serverless function; the site is Next.js on Vercel. No always-on server.
 
 | Layer | Tech |
 |---|---|
-| Schedule | Cloudflare Cron Worker → backend `/internal/run` (or GitHub Actions) |
+| Schedule | GitHub Actions cron → `collector.run_daily` (Cloudflare Worker is an optional alt) |
 | Store | Neon Postgres + pgvector |
 | Backend | FastAPI (Python 3.11+) |
 | LLM | GLM via z.ai (OpenAI-compatible) |
@@ -76,6 +81,22 @@ python -m collector.run_daily               # ninja → build → scrape → cur
 uvicorn api.main:app --reload               # http://localhost:8000  (/docs for OpenAPI)
 cd web && npm install && npm run dev         # http://localhost:3000
 ```
+
+## Deploy (go live) — all Vercel + GitHub, no always-on server
+
+1. **Neon**: create a project, copy the connection string. Locally run `python -m db.connection
+   migrate` against it (creates tables + pgvector).
+2. **GitHub Actions (daily collection)**: add repo secrets `NEON_DATABASE_URL`, `GLM_API_KEY`,
+   `EMBEDDINGS_API_KEY`, `POE2_LEAGUE`, `NINJA_ACCOUNT`, `NINJA_CHARACTER`, `NINJA_BASE_URL`,
+   `NINJA_ECONOMY_PATH`, `NINJA_ITEM_PATH`. The `Daily collection` workflow runs nightly (and
+   on demand via "Run workflow"); it writes to Neon and commits the day's report to `reports/`.
+3. **Vercel — API**: new project from this repo, root = repo root (uses `vercel.json` +
+   `requirements.txt` → `api/index.py`). Set the same env vars. Gives `/farm /build /chat
+   /state /health`.
+4. **Vercel — site**: second project, root = `web/`, env `NEXT_PUBLIC_API_URL` = the API URL.
+5. **Confirm the ninja endpoint** once secrets exist: `python -m collector.ninja_client explore`
+   → adjust `NINJA_*` paths / normalizers to the real PoE2 response, and set the real
+   `POE2_LEAGUE` slug.
 
 ## Phases (account data is a fallback ladder, never a blocker)
 
