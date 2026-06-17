@@ -1,6 +1,6 @@
 """Daily orchestration: the sequence Cloudflare Cron triggers once per day.
 
-ninja_client -> ninja_build_client -> youtube -> rss -> curate -> export_obsidian.
+ninja_client -> ninja_build_client -> youtube -> rss -> curate -> guides -> export_obsidian.
 Each step is wrapped so one failure is logged and the rest still run (resilient collection).
 The same function backs the API's internal /run endpoint that cron calls.
 """
@@ -30,7 +30,14 @@ async def _step(
 
 
 async def run_all(pob_code: str | None = None) -> dict[str, Any]:
-    from collector import curate, ninja_build_client, ninja_client, rss_client, youtube_client
+    from collector import (
+        curate,
+        guides,
+        ninja_build_client,
+        ninja_client,
+        rss_client,
+        youtube_client,
+    )
     from scripts import export_obsidian
 
     results: dict[str, Any] = {}
@@ -38,8 +45,9 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     await _step("my_build", lambda: ninja_build_client.run(pob_code), results)
     await _step("youtube", youtube_client.run, results)
     await _step("rss", rss_client.run, results)
-    # curate + export are sync; run them off the event loop thread.
+    # curate + guides + export are sync; run them off the event loop thread.
     await _step("curate", lambda: asyncio.to_thread(curate.run), results)
+    await _step("guides", lambda: asyncio.to_thread(guides.run), results)
     await _step("export_obsidian", lambda: asyncio.to_thread(export_obsidian.run), results)
     results["summary"] = {
         "ok_steps": [k for k, v in results.items() if isinstance(v, dict) and v.get("ok")],

@@ -22,3 +22,12 @@ def get_farm_ranking(limit: int = 20) -> dict[str, Any]:
         "note": "Profit/hour is an estimate in divine, grounded in community guides + ninja prices.",
         "strategies": strategies,
     }
+
+
+@router.get("/guides")
+def get_farm_guides() -> dict[str, Any]:
+    """Full step-by-step farm tutorials (the 'Farms' tab)."""
+    from db.repo import latest_farm_guides
+
+    league = get_settings().poe2_league
+    return {"league": league, "guides": latest_farm_guides(league)}

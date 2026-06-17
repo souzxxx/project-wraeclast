@@ -68,3 +68,50 @@ button:disabled { opacity: 0.5; cursor: default; }
 .sources a { color: var(--accent); font-size: 0.8rem; display: block; }
 .err { color: #e07b53; }
 .disclaimer { color: var(--muted); font-size: 0.8rem; margin-top: 2rem; }
+
+/* ── nav ── */
+.nav {
+  display: flex; align-items: center; gap: 1.5rem;
+  padding: 0.9rem 1.5rem; border-bottom: 1px solid var(--border);
+  background: rgba(13, 11, 7, 0.7); position: sticky; top: 0; z-index: 10;
+  backdrop-filter: blur(6px);
+}
+.nav .brand { color: var(--accent); font-weight: 700; letter-spacing: 0.04em; }
+.nav .tabs { display: flex; gap: 1rem; }
+.nav a { color: var(--muted); text-decoration: none; padding: 0.2rem 0; border-bottom: 2px solid transparent; }
+.nav a:hover { color: var(--text); }
+.nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── farms guides ── */
+.guides { display: flex; flex-direction: column; gap: 0.9rem; }
+.guide { padding: 0; overflow: hidden; }
+.guide-head {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  background: transparent; color: var(--text); border: 0; padding: 1rem 1.25rem;
+  cursor: pointer; font: inherit; text-align: left;
+}
+.guide-head .name { font-weight: 600; font-size: 1.05rem; }
+.guide-head .meta { display: flex; align-items: center; gap: 0.6rem; }
+.guide-body { padding: 0 1.25rem 1.25rem; border-top: 1px solid var(--border); }
+.guide-body h3 { color: var(--accent); font-size: 0.95rem; margin: 1.1rem 0 0.4rem; }
+.guide-body ol, .guide-body ul { margin: 0; padding-left: 1.2rem; }
+.guide-body li { margin: 0.3rem 0; }
+.guide-body .faq .q { font-weight: 600; margin: 0.6rem 0 0.1rem; }
+.guide-body .faq .a { color: var(--muted); margin: 0; }
+.chev { color: var(--muted); font-size: 0.7rem; }
+
+/* ── brain graph ── */
+.legend { display: flex; flex-wrap: wrap; gap: 0.9rem; margin: 0.5rem 0 1rem; font-size: 0.8rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.graph-wrap {
+  position: relative; border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; background: #0d0b07;
+}
+.node-panel {
+  position: absolute; top: 12px; right: 12px; width: 240px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 0.9rem 1rem;
+}
+.node-panel .close { position: absolute; top: 6px; right: 6px; background: transparent; color: var(--muted); border: 0; cursor: pointer; }
+.node-panel .name { font-weight: 600; margin: 0.4rem 0; word-break: break-word; }
+.node-panel a { color: var(--accent); font-size: 0.85rem; }
