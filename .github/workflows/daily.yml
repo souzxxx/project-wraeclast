@@ -1,0 +1,23 @@
+name: Daily collection (alternative to Cloudflare Cron)
+
+# Use EITHER this or the Cloudflare Worker, not both.
+# Requires repo secrets: BACKEND_URL, INTERNAL_RUN_TOKEN.
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # 04:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger backend daily run
+        run: |
+          curl -sS -X POST "${BACKEND_URL}/internal/run" \
+            -H "x-run-token: ${INTERNAL_RUN_TOKEN}" \
+            -H "user-agent: Project-Wraeclast-Cron/0.1" \
+            --fail-with-body
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          INTERNAL_RUN_TOKEN: ${{ secrets.INTERNAL_RUN_TOKEN }}

@@ -16,7 +16,7 @@ Sempre que a tarefa envolver: puxar economia do poe.ninja, acessar a API oficial
 - Persistir em `price_snapshot` normalizando para um valor base (ex.: chaos ou divine equivalente) p/ permitir histórico comparável.
 - **Sempre** defensivo: campos podem faltar; usar `.get()` e validar com pydantic.
 
-> **Nota de campo (2026-06-17, descoberta no bootstrap):** O site poe.ninja PoE2 migrou para Astro SPA; os paths clássicos (`/api/data/currencyoverview`, `/poe2/api/data/getindexstate`) retornam 404 publicamente. A liga PoE2 ativa hoje é **"Mirage"** (slug `mirage`). O endpoint de dados exato precisa ser confirmado com um GET exploratório no ambiente de deploy (usar `python -m collector.ninja_client explore`). Por isso o `NINJA_BASE_URL` e o template de endpoint são **config-driven via env**, nunca hardcoded.
+> **Nota de campo (2026-06-17, descoberta no bootstrap):** O site poe.ninja PoE2 migrou para Astro SPA; os paths clássicos (`/api/data/currencyoverview`, `/poe2/api/data/getindexstate`) retornam 404 publicamente. **Armadilha confirmada:** ao raspar a página `/poe2/economy/...` o JSON embutido trouxe ligas como "Mirage" com `passiveTree: PassiveTree-3.28` / `atlasTree: AtlasTree-3.28` — versionamento **3.x = PoE1**, ou seja eram dados de **PoE1**, não PoE2. **"Mirage" é liga de PoE1, NÃO sirva como liga PoE2.** A liga PoE2 é a 0.5.0 (spec: "Return of the Ancients"); o endpoint de dados e o slug exato da liga precisam ser confirmados com um GET exploratório no ambiente de deploy (`python -m collector.ninja_client explore`). Por isso `POE2_LEAGUE`, `NINJA_BASE_URL` e o template de endpoint são **config-driven via env**, nunca hardcoded — sempre validar que a resposta é PoE2 (versão 0.x), não PoE1.
 
 ## 2. API oficial GGG (conta — Fase 2, OPCIONAL)
 

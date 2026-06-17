@@ -42,11 +42,11 @@ def test_to_farm_strategies_ranks_by_profit():
         '{"name":"High","expected_drops_per_map":10,"unit_price_chaos":10,"clear_time_minutes":5}'
         "]}"
     )
-    strategies = to_farm_strategies(parse_llm_json(raw), "mirage")
+    strategies = to_farm_strategies(parse_llm_json(raw), "test-league")
     assert [s.name for s in strategies] == ["High", "Low"]
-    assert strategies[0].league == "mirage"
+    assert strategies[0].league == "test-league"
 
 
 def test_to_markdown_contains_estimate_disclaimer():
-    md = to_markdown(to_farm_strategies(parse_llm_json('{"strategies":[]}'), "mirage"), "mirage")
+    md = to_markdown(to_farm_strategies(parse_llm_json('{"strategies":[]}'), "test-league"), "test-league")
     assert "estimate" in md.lower()

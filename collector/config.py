@@ -31,7 +31,9 @@ class Settings(BaseSettings):
 
     # ── poe.ninja ──
     # League is read from config, never hardcoded to a specific league string in code.
-    poe2_league: str = "mirage"
+    # PoE2 0.5.0 challenge league per the spec. Confirm the exact poe.ninja slug with
+    # `python -m collector.ninja_client explore` (NOTE: "Mirage" is a PoE1 league — not this).
+    poe2_league: str = "Return of the Ancients"
     ninja_base_url: str = "https://poe.ninja"
     ninja_economy_path: str = "/api/data/currencyoverview"
     ninja_item_path: str = "/api/data/itemoverview"
