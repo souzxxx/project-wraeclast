@@ -24,10 +24,12 @@ class Settings(BaseSettings):
     glm_curation_model: str = "glm-5.2"
     glm_timeout_seconds: float = 180.0
     glm_max_tokens: int = 6000  # glm-5.x are reasoning models — need budget for thinking + answer
-    # z.ai Coding Plan has no embeddings; default to Jina (OpenAI-compatible, free, 1024-dim).
+    # z.ai Coding Plan has no embeddings; default to Gemini's OpenAI-compatible endpoint
+    # (free tier). gemini-embedding-001 defaults to 3072 dims but supports truncation to
+    # `dimensions` (Matryoshka) — we request 1024 to fit the DB column + pgvector hnsw (<=2000).
     embeddings_api_key: str = ""
-    embeddings_base_url: str = "https://api.jina.ai/v1"
-    embeddings_model: str = "jina-embeddings-v3"
+    embeddings_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    embeddings_model: str = "gemini-embedding-001"
     embedding_dim: int = 1024
 
     # ── Database ──

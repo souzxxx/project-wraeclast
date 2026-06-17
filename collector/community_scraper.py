@@ -12,6 +12,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
+
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
 
@@ -60,13 +62,40 @@ def parse_listing(payload: dict[str, Any]) -> list[CommunityPost]:
     return posts
 
 
+async def _reddit_token(settings: Settings) -> str | None:
+    """Application-only OAuth token (client_credentials). Returns None if no app is configured.
+
+    Reddit blocks unauthenticated .json reads from datacenter IPs (403), so a registered app
+    (https://www.reddit.com/prefs/apps) is the reliable path. Register a 'script'/'web' app and
+    set REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET.
+    """
+    if not (settings.reddit_client_id and settings.reddit_client_secret):
+        return None
+    auth = httpx.BasicAuth(settings.reddit_client_id, settings.reddit_client_secret)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.post(
+            "https://www.reddit.com/api/v1/access_token",
+            data={"grant_type": "client_credentials"},
+            auth=auth,
+            headers={"User-Agent": settings.reddit_user_agent},
+        )
+        resp.raise_for_status()
+        return resp.json().get("access_token")
+
+
 async def fetch_community(settings: Settings | None = None) -> list[CommunityPost]:
     settings = settings or get_settings()
-    url = f"https://www.reddit.com/r/{settings.reddit_subreddit}/top.json"
-    async with HttpClient(settings.reddit_user_agent) as http:
-        payload = await http.get_json(
-            url, params={"t": "week", "limit": 50}, cache_ttl=3600
-        )
+    sub = settings.reddit_subreddit
+    token = await _reddit_token(settings)
+    if token:
+        url = f"https://oauth.reddit.com/r/{sub}/top"
+        headers = {"Authorization": f"Bearer {token}"}
+    else:
+        # Fallback: public JSON (often 403 from datacenter IPs — register an app to fix).
+        url = f"https://www.reddit.com/r/{sub}/top.json"
+        headers = {}
+    async with HttpClient(settings.reddit_user_agent, headers=headers) as http:
+        payload = await http.get_json(url, params={"t": "week", "limit": 50}, cache_ttl=3600)
     posts = parse_listing(payload)
     return _select(posts, settings.scraper_min_score, settings.scraper_max_age_days)
 

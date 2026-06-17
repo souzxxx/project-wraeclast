@@ -32,9 +32,15 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     """Return one embedding vector per input text."""
     if not texts:
         return []
+    settings = get_settings()
     client = _embeddings_client()
-    model = get_settings().embeddings_model
-    resp = client.embeddings.create(model=model, input=[t[:_MAX_CHARS] for t in texts])
+    # Request the target dimension (Matryoshka truncation) so the vector matches the DB column
+    # regardless of the model's native size (e.g. gemini-embedding-001 is 3072 by default).
+    resp = client.embeddings.create(
+        model=settings.embeddings_model,
+        input=[t[:_MAX_CHARS] for t in texts],
+        dimensions=settings.embedding_dim,
+    )
     return [item.embedding for item in resp.data]
 
 

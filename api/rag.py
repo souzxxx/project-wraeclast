@@ -28,26 +28,45 @@ class RagContext:
     chunks: list[dict[str, Any]]
     farms: list[dict[str, Any]]
     my_snapshot: dict[str, Any] | None
+    prices: list[dict[str, Any]]
+
+
+def _price_value(p: dict[str, Any]) -> float | None:
+    return p.get("divine_value") if p.get("divine_value") is not None else p.get("chaos_value")
 
 
 def retrieve(question: str, k: int = 6) -> RagContext:
-    from db.repo import latest_farm_strategies, latest_my_snapshot, search_knowledge
+    from db.repo import (
+        latest_farm_strategies,
+        latest_my_snapshot,
+        latest_prices,
+        search_knowledge,
+    )
 
     league = get_settings().poe2_league
     query_vec = embed_texts([question])[0]
+    prices = sorted(
+        latest_prices(league, limit=1000),
+        key=lambda p: _price_value(p) or 0,
+        reverse=True,
+    )
     return RagContext(
         chunks=search_knowledge(query_vec, limit=k),
         farms=latest_farm_strategies(league, limit=5),
         my_snapshot=latest_my_snapshot(),
+        prices=prices[:25],
     )
 
 
 def build_context_block(ctx: RagContext) -> str:
     parts: list[str] = [f"LEAGUE: {get_settings().poe2_league}"]
+    if ctx.prices:
+        parts.append("CURRENT PRICES (top items, in divine):")
+        parts += [f"- {p['name']}: {_price_value(p)}" for p in ctx.prices]
     if ctx.farms:
         parts.append("CURRENT TOP FARMS (estimates):")
         parts += [
-            f"- {f['name']}: ~{f.get('est_profit_per_hour')} chaos/h (risk {f.get('risk')})"
+            f"- {f['name']}: ~{f.get('est_profit_per_hour')} div/h (risk {f.get('risk')})"
             for f in ctx.farms
         ]
     if ctx.my_snapshot:
