@@ -55,7 +55,8 @@ class Settings(BaseSettings):
     # YouTube Data API v3 (official, free tier): the richest legitimate farming source.
     youtube_api_key: str = ""
     youtube_queries: str = (
-        "Path of Exile 2 farming strategy,PoE2 best currency farm,PoE2 atlas strategy"
+        "Path of Exile 2 farming strategy,PoE2 best currency farm,PoE2 atlas strategy,"
+        "PoE2 tablet tower farming,PoE2 atlas tree guide"
     )
     youtube_max_results: int = 8
     youtube_published_days: int = 21

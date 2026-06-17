@@ -113,7 +113,8 @@ _SYSTEM = (
     'markdown, no prose outside the JSON. Schema: {"strategies":[{"name","est_profit_per_hour",'
     '"expected_drops_per_map","unit_price_chaos","clear_time_minutes","entry_cost_chaos",'
     '"investment_required","risk":"low|med|high","summary","sources":[{"url","title"}]}]}. '
-    "Everything is an ESTIMATE."
+    "Write the `summary` value in BRAZILIAN PORTUGUESE (pt-BR); keep JSON keys in English and "
+    "item/skill proper nouns in their in-game form. Everything is an ESTIMATE."
 )
 
 

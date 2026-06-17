@@ -124,14 +124,15 @@ def replace_farm_guides(league: str, guides: list[dict[str, Any]]) -> int:
             cur.executemany(
                 """INSERT INTO farm_guide
                    (league, name, profit_per_hour, risk, target_currency, overview,
-                    steps, items, faq, sources)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    steps, items, atlas, faq, sources)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 [
                     (
                         league, g.get("name"), g.get("profit_per_hour"), g.get("risk"),
                         g.get("target_currency"), g.get("overview"),
                         json.dumps(g.get("steps", [])), json.dumps(g.get("items", [])),
-                        json.dumps(g.get("faq", [])), json.dumps(g.get("sources", [])),
+                        g.get("atlas"), json.dumps(g.get("faq", [])),
+                        json.dumps(g.get("sources", [])),
                     )
                     for g in guides
                 ],
@@ -142,8 +143,8 @@ def replace_farm_guides(league: str, guides: list[dict[str, Any]]) -> int:
 
 def latest_farm_guides(league: str) -> list[dict[str, Any]]:
     return fetch_all(
-        """SELECT name, profit_per_hour, risk, target_currency, overview, steps, items, faq,
-                  sources, captured_at
+        """SELECT name, profit_per_hour, risk, target_currency, overview, steps, items, atlas,
+                  faq, sources, captured_at
            FROM farm_guide WHERE league = %s
            ORDER BY profit_per_hour DESC NULLS LAST""",
         (league,),

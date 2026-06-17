@@ -7,6 +7,7 @@ RAW = """```json
   {"name":"Ritual Omen","profit_per_hour":"32 div","risk":"medium","target_currency":"Divine Orb",
    "overview":"Run rituals.","steps":["Set tablets","Run maps","Defer altars"],
    "items":[{"name":"Ritual tablet","purpose":"spawn altars"}],
+   "atlas":"Pegue os notáveis de Ritual e densidade de monstros.",
    "faq":[{"q":"Risky?","a":"Death penalty on reroll."}],
    "sources":["https://youtu.be/x"]},
   {"name":"Breach","profit_per_hour":-5,"risk":"med","steps":["open breaches"]}
@@ -27,6 +28,8 @@ def test_to_rows_sorts_and_clamps():
     assert rows[1]["profit_per_hour"] == 0.0  # -5 clamped to 0
     assert rows[0]["items"][0] == {"name": "Ritual tablet", "purpose": "spawn altars"}
     assert rows[0]["steps"] == ["Set tablets", "Run maps", "Defer altars"]
+    assert "Ritual" in rows[0]["atlas"]
+    assert rows[1]["atlas"] == ""  # missing atlas defaults to empty
 
 
 def test_parse_rejects_garbage():

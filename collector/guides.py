@@ -16,7 +16,7 @@ from pydantic import BaseModel, ValidationError, field_validator
 from collector.config import get_settings
 from collector.llm import glm_chat
 
-MAX_GUIDES = 5
+MAX_GUIDES = 6
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -46,6 +46,7 @@ class _Guide(BaseModel):
     overview: str = ""
     steps: list[str] = []
     items: list[_Item] = []
+    atlas: str = ""
     faq: list[_Faq] = []
     sources: list[dict[str, Any]] = []
 
@@ -75,14 +76,19 @@ class _GuidesResponse(BaseModel):
 
 _SYSTEM = (
     "You are a Path of Exile 2 farming coach. From the community knowledge + prices, write "
-    f"complete, execution-ready guides for the top {MAX_GUIDES} farm strategies. Each guide must "
-    "let a player run it PERFECTLY and answer likely doubts. Output STRICT JSON only — no "
+    f"complete, execution-ready guides for the top {MAX_GUIDES} farm strategies. One of them "
+    "MUST be a TABLET farming strategy (precursor tablets / towers) if the data supports it. "
+    "Each guide must let a player run it PERFECTLY and answer likely doubts. "
+    "IMPORTANT: write every TEXT VALUE in BRAZILIAN PORTUGUESE (pt-BR) — overview, steps, "
+    "item purposes, atlas, faq. Keep the JSON keys in English exactly as in the schema, and "
+    "keep proper nouns (item/skill names) in their in-game form. Output STRICT JSON only — no "
     'markdown. Schema: {"guides":[{"name","profit_per_hour"(divine/h number),'
-    '"risk":"low|med|high","target_currency","overview"(2-3 sentences),'
-    '"steps":["ordered, concrete actions"],"items":[{"name","purpose"}](maps/tablets/scarabs/'
-    'gear/gems needed and why),"faq":[{"q","a"}](common pitfalls & doubts),'
-    '"sources":[{"url","title"}](from the provided knowledge)}]}. Be specific and practical. '
-    "Everything is an ESTIMATE."
+    '"risk":"low|med|high","target_currency","overview"(2-3 frases),'
+    '"steps":["ações concretas em ordem"],"items":[{"name","purpose"}](mapas/tablets/scarabs/'
+    'gear/gems necessários e por quê),"atlas"(como montar e upar a árvore do Atlas para esse '
+    'farm: quais nós/notáveis priorizar, setup de torres/tablets),"faq":[{"q","a"}](dúvidas '
+    'comuns e erros),"sources":[{"url","title"}](das fontes fornecidas)}]}. '
+    "Seja específico e prático. Tudo é ESTIMATIVA."
 )
 
 
@@ -117,6 +123,7 @@ def to_rows(resp: _GuidesResponse) -> list[dict[str, Any]]:
                 "overview": g.overview,
                 "steps": g.steps,
                 "items": [i.model_dump() for i in g.items],
+                "atlas": g.atlas,
                 "faq": [f.model_dump() for f in g.faq],
                 "sources": g.sources,
             }

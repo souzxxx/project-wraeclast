@@ -11,6 +11,7 @@ type Guide = {
   overview: string | null;
   steps: string[];
   items: { name: string; purpose: string }[];
+  atlas: string | null;
   faq: { q: string; a: string }[];
   sources: { url: string; title: string }[];
 };
@@ -71,6 +72,13 @@ export default function FarmsPage() {
                         </li>
                       ))}
                     </ul>
+                  </>
+                )}
+
+                {g.atlas && (
+                  <>
+                    <h3>Atlas — como montar e upar</h3>
+                    <p>{g.atlas}</p>
                   </>
                 )}
 
