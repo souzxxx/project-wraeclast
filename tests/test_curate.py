@@ -48,5 +48,6 @@ def test_to_farm_strategies_ranks_by_profit():
 
 
 def test_to_markdown_contains_estimate_disclaimer():
-    md = to_markdown(to_farm_strategies(parse_llm_json('{"strategies":[]}'), "test-league"), "test-league")
+    strategies = to_farm_strategies(parse_llm_json('{"strategies":[]}'), "test-league")
+    md = to_markdown(strategies, "test-league")
     assert "estimate" in md.lower()
