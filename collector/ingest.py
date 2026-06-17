@@ -10,16 +10,12 @@ funnel through `ingest_documents`.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from openai import OpenAI
 
 from collector.config import get_settings
 from db.models import KnowledgeChunk
 from db.repo import upsert_knowledge_chunk
-
-if TYPE_CHECKING:
-    from collector.community_scraper import CommunityPost
 
 _MAX_CHARS = 8000  # keep each chunk within a sane embedding window
 
@@ -70,10 +66,3 @@ def ingest_documents(docs: list[KnowledgeDoc]) -> int:
             )
         )
     return len(docs)
-
-
-def ingest_posts(posts: list[CommunityPost]) -> int:
-    """Back-compat for the (dormant) Reddit scraper: CommunityPost -> KnowledgeDoc."""
-    return ingest_documents(
-        [KnowledgeDoc(source_url=p.url, title=p.title, content=p.content) for p in posts]
-    )

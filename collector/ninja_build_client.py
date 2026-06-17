@@ -77,7 +77,7 @@ async def fetch_my_build(settings: Settings | None = None) -> MySnapshot:
     settings = settings or get_settings()
     if not settings.ninja_account:
         raise CharacterNotOnLadder("NINJA_ACCOUNT not configured")
-    async with HttpClient(settings.reddit_user_agent, base_url=settings.ninja_base_url) as http:
+    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
         try:
             data = await http.get_json(_profile_endpoint(settings), cache_ttl=3600)
         except Exception as exc:  # noqa: BLE001
@@ -119,7 +119,7 @@ async def run(pob_code: str | None = None) -> bool:
 
 async def explore() -> None:
     settings = get_settings()
-    async with HttpClient(settings.reddit_user_agent, base_url=settings.ninja_base_url) as http:
+    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
         data = await http.get_json(_profile_endpoint(settings))
     print(json.dumps(data, indent=2, ensure_ascii=False)[:4000])
 

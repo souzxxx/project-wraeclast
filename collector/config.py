@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     ninja_character: str = ""
 
     # ── Community knowledge sources ──
+    # Descriptive User-Agent for all outbound HTTP (ninja, youtube, rss).
+    user_agent: str = "Project-Wraeclast/0.1 (contact: souzxxx)"
     # YouTube Data API v3 (official, free tier): the richest legitimate farming source.
     youtube_api_key: str = ""
     youtube_queries: str = (
@@ -59,17 +61,6 @@ class Settings(BaseSettings):
     youtube_published_days: int = 21
     # RSS/Atom feeds (syndication is meant to be consumed). Comma-separated; empty = skip.
     rss_feeds: str = ""
-
-    # ── Reddit (DORMANT) ──
-    # Reddit's Responsible Builder Policy requires explicit approval and restricts using the
-    # data with AI models (even non-commercial). NOT used in the daily flow. Kept for the case
-    # where official approval is obtained. See community_scraper.py.
-    reddit_user_agent: str = "Project-Wraeclast/0.1 (contact: souzxxx)"
-    reddit_subreddit: str = "PathOfExile2"
-    reddit_client_id: str = ""
-    reddit_client_secret: str = ""
-    scraper_min_score: int = 25
-    scraper_max_age_days: int = 7
 
     @property
     def youtube_query_list(self) -> list[str]:

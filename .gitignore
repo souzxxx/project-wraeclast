@@ -25,6 +25,7 @@ node_modules/
 web/.next/
 web/out/
 web/.vercel/
+web/next-env.d.ts
 
 # Obsidian export (generated locally)
 vault/

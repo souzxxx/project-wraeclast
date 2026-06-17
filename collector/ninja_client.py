@@ -87,7 +87,7 @@ async def _get_economy(http: HttpClient, settings: Settings, cache_ttl: float) -
 
 async def fetch_economy(settings: Settings | None = None) -> list[PriceSnapshot]:
     settings = settings or get_settings()
-    async with HttpClient(settings.reddit_user_agent, base_url=settings.ninja_base_url) as http:
+    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
         payload = await _get_economy(http, settings, CACHE_TTL)
     return normalize_exchange(payload, settings.poe2_league)
 
@@ -104,7 +104,7 @@ async def run() -> int:
 async def explore() -> None:
     """GET the configured economy endpoint and dump raw JSON — confirm shape before modeling."""
     settings = get_settings()
-    async with HttpClient(settings.reddit_user_agent, base_url=settings.ninja_base_url) as http:
+    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
         data = await _get_economy(http, settings, 0)
     if isinstance(data, dict):
         sample = {k: (v[:2] if isinstance(v, list) else v) for k, v in data.items()}

@@ -47,14 +47,14 @@ runs as a Vercel Python serverless function; the site is Next.js on Vercel. No a
 ## Layout
 
 ```
-collector/   ninja_client · ninja_build_client · pob_parser · ggg_client(F2)
-             community_scraper · ingest · curate · run_daily
+collector/   ninja_client · ninja_build_client · pob_parser · youtube_client · rss_client
+             add_knowledge · ingest · curate · guides · run_daily · ggg_client(F2)
 db/          models · repo · connection · migrations/
-api/         main · rag · build_diff · routes/{farm,build,chat}
+api/         main · rag · build_diff · graph · routes/{farm,build,chat,ingest,graph}
 scripts/     export_obsidian
-web/         Next.js dashboard
-cloudflare/  cron worker + wrangler
-routines/    Claude Code daily-curation routine
+web/         Next.js dashboard (Hoje / Farms / Cérebro)
+cloudflare/  cron worker + wrangler (optional alt to GitHub Actions)
+routines/    nightly_agent (scheduled cloud-agent spec)
 docs/        spec + phase-0 command sequence
 tests/       pure-logic unit tests (no network/DB)
 ```

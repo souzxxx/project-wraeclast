@@ -95,9 +95,12 @@ project-wraeclast/
 │  ├─ ninja_build_client.py   # build/gear/passivas do meu char (Fase 0, nível 1 da escada)
 │  ├─ pob_parser.py           # parse de código PoB / clipboard (Fase 1, nível 2)
 │  ├─ ggg_client.py           # OAuth 2.1 PKCE (Fase 2, nível 3 — opcional)
-│  ├─ community_scraper.py    # Reddit/fórum, filtrado por upvotes/recência
-│  ├─ ingest.py               # grava Neon + embeddings
-│  └─ curate.py               # GLM resume/rankeia → farm_strategy + markdown
+│  ├─ youtube_client.py       # YouTube Data API (fonte de farming) → knowledge
+│  ├─ rss_client.py           # feeds RSS/Atom (opcional) → knowledge
+│  ├─ add_knowledge.py        # curadoria manual: URL/texto → knowledge (endpoint /ingest)
+│  ├─ ingest.py               # grava Neon + embeddings (Gemini)
+│  ├─ curate.py               # GLM resume/rankeia → farm_strategy + markdown
+│  └─ guides.py               # GLM gera guias completos → farm_guide
 ├─ api/                       # FastAPI
 │  ├─ main.py
 │  ├─ routes/{farm,build,chat}.py
@@ -125,7 +128,7 @@ project-wraeclast/
 
 - [ ] `collector` puxa ninja e grava `price_snapshot` no Neon.
 - [ ] `ninja_build_client` lê meu char do ninja e grava `my_snapshot` (build/gear/passivas/skills).
-- [ ] `community_scraper` coleta e `ingest` embeda em `knowledge_chunk`.
+- [ ] `youtube_client`/`rss_client`/`add_knowledge` coletam e `ingest` embeda em `knowledge_chunk`.
 - [ ] `curate.py` gera `farm_strategy` rankeado por lucro/hora via GLM.
 - [ ] API `/chat` responde com RAG (recupera chunks + GLM).
 - [ ] API `/farm` retorna ranking atual.
