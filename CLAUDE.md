@@ -19,7 +19,7 @@ Pilares: (1) farm rankeado por lucro/hora, (2) diff de build vs meta, (3) chat q
 
 | Camada | Tecnologia |
 |---|---|
-| Coleta agendada | Cloudflare Cron Triggers (Workers) |
+| Coleta agendada | GitHub Actions (cron, roda os coletores Python direto) |
 | Banco | Neon Postgres + pgvector |
 | Storage mídia | Cloudflare R2 |
 | API backend | FastAPI (Python) |
@@ -90,7 +90,7 @@ Aprovação OAuth GGG leva ~1-4 semanas (email a `oauth@grindinggear.com` — ca
 ```
 project-wraeclast/
 ├─ CLAUDE.md                  # este arquivo
-├─ collector/                 # roda no Cloudflare Cron
+├─ collector/                 # roda no GitHub Actions (cron diário)
 │  ├─ ninja_client.py         # economia (preços)
 │  ├─ ninja_build_client.py   # build/gear/passivas do meu char (Fase 0, nível 1 da escada)
 │  ├─ pob_parser.py           # parse de código PoB / clipboard (Fase 1, nível 2)
@@ -135,4 +135,4 @@ project-wraeclast/
 - [ ] API `/build` retorna diff do meu char vs builds populares do ninja.
 - [ ] Site Next mostra "estado da liga hoje" + farms + meu progresso de build.
 - [ ] `export_obsidian.py` gera relatório markdown diário.
-- [ ] Tudo roda via Cloudflare Cron 1x/dia sem intervenção.
+- [ ] Tudo roda via GitHub Actions 1x/dia sem intervenção.

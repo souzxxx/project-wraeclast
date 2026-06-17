@@ -35,7 +35,7 @@ runs as a Vercel Python serverless function; the site is Next.js on Vercel. No a
 
 | Layer | Tech |
 |---|---|
-| Schedule | GitHub Actions cron → `collector.run_daily` (Cloudflare Worker is an optional alt) |
+| Schedule | GitHub Actions cron → `collector.run_daily` (runs the Python collectors directly) |
 | Store | Neon Postgres + pgvector |
 | Backend | FastAPI (Python 3.11+) |
 | LLM | GLM via z.ai (OpenAI-compatible) |
@@ -53,7 +53,7 @@ db/          models · repo · connection · migrations/
 api/         main · rag · build_diff · graph · routes/{farm,build,chat,ingest,graph}
 scripts/     export_obsidian
 web/         Next.js dashboard (Hoje / Farms / Cérebro)
-cloudflare/  cron worker + wrangler (optional alt to GitHub Actions)
+.github/     CI + daily collection workflows
 routines/    nightly_agent (scheduled cloud-agent spec)
 docs/        spec + phase-0 command sequence
 tests/       pure-logic unit tests (no network/DB)
@@ -107,7 +107,7 @@ cd web && npm install && npm run dev         # http://localhost:3000
 
 ## Status
 
-- ✅ Backend (FastAPI): `/farm`, `/build`, `/chat`, `/state`, `/health`, `/internal/run`.
+- ✅ Backend (FastAPI): `/farm`, `/farm/guides`, `/build`, `/chat`, `/ingest`, `/state`, `/graph`, `/health`.
 - ✅ Collectors, curation (strict-JSON + computed profit/hour), embeddings, Obsidian export.
 - ✅ PoB parser + GGG OAuth/PKCE scaffolding. Next.js dashboard. CI (ruff + pytest, 25 tests).
 - ⏳ Needs live credentials to run end-to-end: `GLM_API_KEY`, `NEON_DATABASE_URL`, ninja profile.

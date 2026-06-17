@@ -1,8 +1,8 @@
-"""Daily orchestration: the sequence Cloudflare Cron triggers once per day.
+"""Daily orchestration: the sequence GitHub Actions runs once per day.
 
 ninja_client -> ninja_build_client -> youtube -> rss -> curate -> guides -> export_obsidian.
 Each step is wrapped so one failure is logged and the rest still run (resilient collection).
-The same function backs the API's internal /run endpoint that cron calls.
+Invoked by GitHub Actions: `python -m collector.run_daily`.
 """
 
 from __future__ import annotations

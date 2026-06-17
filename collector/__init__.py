@@ -1,6 +1,6 @@
 """Project Wraeclast — data collection package.
 
-Runs on a daily schedule (Cloudflare Cron -> backend) to pull PoE2 economy,
+Runs on a daily schedule (GitHub Actions) to pull PoE2 economy,
 account build data, and curated community knowledge into Neon Postgres.
 """
 

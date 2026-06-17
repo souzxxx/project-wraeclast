@@ -1,13 +1,14 @@
-"""FastAPI app: public read endpoints for the site + an internal cron-triggered run.
+"""FastAPI app: public read endpoints for the site + token-gated chat/ingest.
 
 Run locally:  uvicorn api.main:app --reload
+(Daily collection runs in GitHub Actions via `python -m collector.run_daily`, not over HTTP.)
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import build, chat, farm, graph, ingest
@@ -58,17 +59,3 @@ def league_state() -> dict[str, Any]:
         "top_farms": latest_farm_strategies(league, limit=10),
         "my_snapshot": latest_my_snapshot(),
     }
-
-
-@app.post("/internal/run")
-async def internal_run(
-    x_run_token: str = Header(default=""),
-    pob_code: str | None = None,
-) -> dict[str, Any]:
-    """Cron-triggered daily collection. Protected by a shared secret (INTERNAL_RUN_TOKEN)."""
-    settings = get_settings()
-    if not settings.internal_run_token or x_run_token != settings.internal_run_token:
-        raise HTTPException(status_code=401, detail="invalid run token")
-    from collector.run_daily import run_all
-
-    return await run_all(pob_code)
