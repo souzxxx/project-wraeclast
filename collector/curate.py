@@ -55,6 +55,9 @@ def estimate_profit_per_hour(
 
 class _LLMStrategy(BaseModel):
     name: str
+    # Direct, source-grounded estimate (divine/hour). Community guides usually state this.
+    est_profit_per_hour: float | None = None
+    # Components for the formula cross-check (often less reliable than the direct estimate).
     expected_drops_per_map: float = 0.0
     unit_price_chaos: float = 0.0
     clear_time_minutes: float = 0.0
@@ -72,7 +75,7 @@ class _LLMStrategy(BaseModel):
     def _req_float(cls, v: Any) -> float:
         return _coerce_float(v) or 0.0
 
-    @field_validator("investment_required", mode="before")
+    @field_validator("est_profit_per_hour", "investment_required", mode="before")
     @classmethod
     def _opt_float(cls, v: Any) -> float | None:
         return _coerce_float(v)
@@ -101,13 +104,16 @@ class _LLMResponse(BaseModel):
 
 
 _SYSTEM = (
-    "You are a Path of Exile 2 economy analyst. Identify the farm strategies with the most "
-    "community traction right now and estimate, per strategy, the expected valuable drops per "
-    "map, the unit price in chaos (cross-referenced with the provided prices), the average clear "
-    "time in minutes, and the entry cost. Output STRICT JSON only — no markdown, no prose outside "
-    'the JSON. Schema: {"strategies":[{"name","expected_drops_per_map","unit_price_chaos",'
-    '"clear_time_minutes","entry_cost_chaos","investment_required","risk":"low|med|high",'
-    '"summary","sources":[{"url","title"}]}]}. Everything is an ESTIMATE.'
+    "You are a Path of Exile 2 economy analyst. From the community knowledge + current prices, "
+    "identify the farm strategies with the most traction right now. For each, give "
+    "`est_profit_per_hour`: your best estimate of NET profit per hour in DIVINE orbs, grounded "
+    "in the community sources (guides often state a per-hour figure directly — use it; never "
+    "negative). Also fill the cross-check components (expected_drops_per_map, unit_price_chaos "
+    "in divine, clear_time_minutes, entry_cost) when you can. Output STRICT JSON only — no "
+    'markdown, no prose outside the JSON. Schema: {"strategies":[{"name","est_profit_per_hour",'
+    '"expected_drops_per_map","unit_price_chaos","clear_time_minutes","entry_cost_chaos",'
+    '"investment_required","risk":"low|med|high","summary","sources":[{"url","title"}]}]}. '
+    "Everything is an ESTIMATE."
 )
 
 
@@ -159,9 +165,13 @@ def parse_llm_json(text: str) -> _LLMResponse:
 def to_farm_strategies(resp: _LLMResponse, league: str) -> list[FarmStrategy]:
     out: list[FarmStrategy] = []
     for s in resp.strategies:
-        pph = estimate_profit_per_hour(
+        # Prefer the model's source-grounded per-hour estimate; the naive formula on
+        # hallucinated components tends to go negative. Fall back to the formula otherwise.
+        formula = estimate_profit_per_hour(
             s.expected_drops_per_map, s.unit_price_chaos, s.clear_time_minutes, s.entry_cost_chaos
         )
+        pph = s.est_profit_per_hour if s.est_profit_per_hour is not None else formula
+        pph = max(pph, 0.0)
         out.append(
             FarmStrategy(
                 league=league,
@@ -181,7 +191,7 @@ def to_markdown(strategies: list[FarmStrategy], league: str) -> str:
     lines = [f"## Top farm strategies — {league}", "", "_All figures are estimates._", ""]
     for i, s in enumerate(strategies, 1):
         lines.append(f"### {i}. {s.name}")
-        lines.append(f"- **~{s.est_profit_per_hour} chaos/h** · risk: {s.risk or 'n/a'} "
+        lines.append(f"- **~{s.est_profit_per_hour} div/h** · risk: {s.risk or 'n/a'} "
                      f"· investment: {s.investment_required or 'n/a'}")
         if s.summary:
             lines.append(f"- {s.summary}")

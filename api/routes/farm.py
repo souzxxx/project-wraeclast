@@ -19,6 +19,6 @@ def get_farm_ranking(limit: int = 20) -> dict[str, Any]:
     strategies = latest_farm_strategies(league, limit=limit)
     return {
         "league": league,
-        "note": "All profit/hour figures are estimates (drops × ninja price ÷ clear time).",
+        "note": "Profit/hour is an estimate in divine, grounded in community guides + ninja prices.",
         "strategies": strategies,
     }
