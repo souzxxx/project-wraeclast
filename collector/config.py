@@ -17,27 +17,33 @@ class Settings(BaseSettings):
     )
 
     # ── LLM (GLM via z.ai, OpenAI-compatible) ──
+    # Coding Plan uses the coding endpoint; the general /paas endpoint needs separate balance.
     glm_api_key: str = ""
-    glm_base_url: str = "https://api.z.ai/api/openai/v1"
-    glm_chat_model: str = "glm-4.7-flash"
-    glm_curation_model: str = "glm-4.7-flash"
+    glm_base_url: str = "https://api.z.ai/api/coding/paas/v4"
+    glm_chat_model: str = "glm-5.2"
+    glm_curation_model: str = "glm-5.2"
+    glm_timeout_seconds: float = 180.0
+    glm_max_tokens: int = 6000  # glm-5.x are reasoning models — need budget for thinking + answer
+    # z.ai Coding Plan has no embeddings; default to Jina (OpenAI-compatible, free, 1024-dim).
     embeddings_api_key: str = ""
-    embeddings_base_url: str = "https://api.z.ai/api/openai/v1"
-    embeddings_model: str = "embedding-2"
+    embeddings_base_url: str = "https://api.jina.ai/v1"
+    embeddings_model: str = "jina-embeddings-v3"
     embedding_dim: int = 1024
 
     # ── Database ──
     neon_database_url: str = ""
 
     # ── poe.ninja ──
-    # League is read from config, never hardcoded to a specific league string in code.
-    # PoE2 0.5.0 challenge league per the spec. Confirm the exact poe.ninja slug with
-    # `python -m collector.ninja_client explore` (NOTE: "Mirage" is a PoE1 league — not this).
-    poe2_league: str = "Return of the Ancients"
+    # League is read from config, never hardcoded in code. The poe.ninja PoE2 economy API
+    # wants the DISPLAY NAME (with spaces), e.g. "Runes of Aldur" — not the URL slug.
+    # (NOTE: "Mirage" is a PoE1 league; PoE2 uses 0.x versioning. Confirm via `explore`.)
+    poe2_league: str = "Runes of Aldur"
     ninja_base_url: str = "https://poe.ninja"
-    ninja_economy_path: str = "/api/data/currencyoverview"
-    ninja_item_path: str = "/api/data/itemoverview"
-    ninja_builds_base: str = "https://poe.ninja/poe2/builds"
+    # PoE2 economy = the currency-exchange overview (confirmed live; classic /api/data 404s).
+    ninja_economy_path: str = "/poe2/api/economy/exchange/0/overview"
+    ninja_economy_type: str = "Currency"
+    # PoE2 public profile characters: <base>/<account>/<version> returns a JSON list of chars.
+    ninja_profile_path: str = "/poe2/api/profile/characters"
     ninja_account: str = ""
     ninja_character: str = ""
 

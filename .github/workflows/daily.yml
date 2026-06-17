@@ -5,8 +5,9 @@ name: Daily collection
 # NOT fit a serverless function's time limit, so it lives here, not on Vercel.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   NEON_DATABASE_URL, GLM_API_KEY, EMBEDDINGS_API_KEY (if separate), POE2_LEAGUE,
-#   NINJA_ACCOUNT, NINJA_CHARACTER, NINJA_BASE_URL, NINJA_ECONOMY_PATH, NINJA_ITEM_PATH
+#   NEON_DATABASE_URL, GLM_API_KEY, NINJA_ACCOUNT
+# Optional: EMBEDDINGS_API_KEY (enables the community-RAG step), POE2_LEAGUE/NINJA_CHARACTER
+#   (otherwise the code defaults in collector/config.py are used).
 
 on:
   schedule:
@@ -30,15 +31,12 @@ jobs:
           pip install -e .
       - name: Run daily collection
         env:
+          # Real secrets. Everything else (GLM base/model, league, ninja paths) uses the
+          # defaults in collector/config.py — only set these as secrets to override.
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
           EMBEDDINGS_API_KEY: ${{ secrets.EMBEDDINGS_API_KEY }}
-          POE2_LEAGUE: ${{ secrets.POE2_LEAGUE }}
           NINJA_ACCOUNT: ${{ secrets.NINJA_ACCOUNT }}
-          NINJA_CHARACTER: ${{ secrets.NINJA_CHARACTER }}
-          NINJA_BASE_URL: ${{ secrets.NINJA_BASE_URL }}
-          NINJA_ECONOMY_PATH: ${{ secrets.NINJA_ECONOMY_PATH }}
-          NINJA_ITEM_PATH: ${{ secrets.NINJA_ITEM_PATH }}
           OBSIDIAN_VAULT_DIR: reports
         run: python -m collector.run_daily
       - name: Commit daily report

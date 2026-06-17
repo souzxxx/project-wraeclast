@@ -10,10 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from openai import OpenAI
-
 from collector.config import get_settings
 from collector.ingest import embed_texts
+from collector.llm import glm_chat
 
 _SYSTEM = (
     "You are a Path of Exile 2 advisor for the league given in context. Answer ONLY from the "
@@ -29,13 +28,6 @@ class RagContext:
     chunks: list[dict[str, Any]]
     farms: list[dict[str, Any]]
     my_snapshot: dict[str, Any] | None
-
-
-def _glm_client() -> OpenAI:
-    s = get_settings()
-    if not s.glm_api_key:
-        raise RuntimeError("GLM_API_KEY is not set.")
-    return OpenAI(api_key=s.glm_api_key, base_url=s.glm_base_url)
 
 
 def retrieve(question: str, k: int = 6) -> RagContext:
@@ -72,19 +64,18 @@ def build_context_block(ctx: RagContext) -> str:
 
 def answer(question: str) -> dict[str, Any]:
     ctx = retrieve(question)
-    client = _glm_client()
-    resp = client.chat.completions.create(
-        model=get_settings().glm_chat_model,
-        messages=[
+    text = glm_chat(
+        [
             {"role": "system", "content": _SYSTEM},
             {
                 "role": "user",
                 "content": f"CONTEXT:\n{build_context_block(ctx)}\n\nQUESTION: {question}",
             },
         ],
+        model=get_settings().glm_chat_model,
         temperature=0.4,
     )
     return {
-        "answer": resp.choices[0].message.content,
+        "answer": text,
         "sources": [{"url": c.get("source_url"), "title": c.get("title")} for c in ctx.chunks],
     }
