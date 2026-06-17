@@ -91,11 +91,32 @@ export default function Home() {
   );
 }
 
+const TOKEN_KEY = "wraeclast_chat_token";
+
 function Chat() {
   const [q, setQ] = useState("");
   const [resp, setResp] = useState<ChatResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [token, setToken] = useState("");
+  const [pwInput, setPwInput] = useState("");
+
+  useEffect(() => {
+    setToken(localStorage.getItem(TOKEN_KEY) || "");
+  }, []);
+
+  function saveToken() {
+    if (!pwInput.trim()) return;
+    localStorage.setItem(TOKEN_KEY, pwInput.trim());
+    setToken(pwInput.trim());
+    setPwInput("");
+    setErr("");
+  }
+
+  function forget() {
+    localStorage.removeItem(TOKEN_KEY);
+    setToken("");
+  }
 
   async function ask() {
     if (!q.trim()) return;
@@ -105,16 +126,47 @@ function Chat() {
     try {
       const r = await fetch(`${API}/chat`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-access-token": token },
         body: JSON.stringify({ question: q }),
       });
+      if (r.status === 401) {
+        forget();
+        throw new Error("Senha inválida — digite novamente.");
+      }
+      if (r.status === 503) throw new Error("Chat ainda não configurado no servidor.");
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setResp(await r.json());
     } catch (e) {
-      setErr(String(e));
+      setErr(String(e instanceof Error ? e.message : e));
     } finally {
       setLoading(false);
     }
+  }
+
+  if (!token) {
+    return (
+      <>
+        <p className="meta">O chat é protegido por senha (evita abuso dos tokens de LLM).</p>
+        <input
+          type="password"
+          value={pwInput}
+          onChange={(e) => setPwInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && saveToken()}
+          placeholder="Senha de acesso"
+          style={{
+            width: "100%",
+            background: "#0d0b07",
+            color: "var(--text)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "0.6rem",
+            font: "inherit",
+          }}
+        />
+        <button onClick={saveToken}>Desbloquear</button>
+        {err && <p className="err">{err}</p>}
+      </>
+    );
   }
 
   return (
@@ -126,6 +178,12 @@ function Chat() {
       />
       <button onClick={ask} disabled={loading}>
         {loading ? "Thinking…" : "Ask"}
+      </button>
+      <button
+        onClick={forget}
+        style={{ marginLeft: 8, background: "transparent", color: "var(--muted)", border: "1px solid var(--border)" }}
+      >
+        Esquecer senha
       </button>
       {err && <p className="err">{err}</p>}
       {resp && (

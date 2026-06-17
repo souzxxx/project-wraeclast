@@ -65,6 +65,10 @@ class Settings(BaseSettings):
 
     # ── API server ──
     internal_run_token: str = ""
+    # Shared password gating /chat (the only endpoint that spends GLM/embeddings quota).
+    # The owner enters it once in the site; it is NOT baked into the frontend bundle.
+    # If empty, /chat is disabled (fail-closed) so an unconfigured deploy can't be abused.
+    chat_access_token: str = ""
     cors_origins: str = "http://localhost:3000"
 
     # ── Obsidian ──
