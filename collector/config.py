@@ -49,13 +49,35 @@ class Settings(BaseSettings):
     ninja_account: str = ""
     ninja_character: str = ""
 
-    # ── Community scraper ──
+    # ── Community knowledge sources ──
+    # YouTube Data API v3 (official, free tier): the richest legitimate farming source.
+    youtube_api_key: str = ""
+    youtube_queries: str = (
+        "Path of Exile 2 farming strategy,PoE2 best currency farm,PoE2 atlas strategy"
+    )
+    youtube_max_results: int = 8
+    youtube_published_days: int = 21
+    # RSS/Atom feeds (syndication is meant to be consumed). Comma-separated; empty = skip.
+    rss_feeds: str = ""
+
+    # ── Reddit (DORMANT) ──
+    # Reddit's Responsible Builder Policy requires explicit approval and restricts using the
+    # data with AI models (even non-commercial). NOT used in the daily flow. Kept for the case
+    # where official approval is obtained. See community_scraper.py.
     reddit_user_agent: str = "Project-Wraeclast/0.1 (contact: souzxxx)"
     reddit_subreddit: str = "PathOfExile2"
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
     scraper_min_score: int = 25
     scraper_max_age_days: int = 7
+
+    @property
+    def youtube_query_list(self) -> list[str]:
+        return [q.strip() for q in self.youtube_queries.split(",") if q.strip()]
+
+    @property
+    def rss_feed_list(self) -> list[str]:
+        return [f.strip() for f in self.rss_feeds.split(",") if f.strip()]
 
     # ── GGG OAuth (Phase 2, optional) ──
     ggg_client_id: str = ""

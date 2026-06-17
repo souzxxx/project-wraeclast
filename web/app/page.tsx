@@ -81,6 +81,11 @@ export default function Home() {
           <h2>Ask the league</h2>
           <Chat />
         </section>
+
+        <section className="card chat" style={{ gridColumn: "1 / -1" }}>
+          <h2>Add knowledge</h2>
+          <AddKnowledge />
+        </section>
       </div>
 
       <p className="disclaimer">
@@ -201,6 +206,54 @@ function Chat() {
           )}
         </div>
       )}
+    </>
+  );
+}
+
+function AddKnowledge() {
+  const [value, setValue] = useState("");
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function add() {
+    if (!value.trim()) return;
+    const token = localStorage.getItem(TOKEN_KEY) || "";
+    if (!token) {
+      setMsg("Desbloqueie o chat acima primeiro (mesma senha).");
+      return;
+    }
+    setLoading(true);
+    setMsg("");
+    try {
+      const r = await fetch(`${API}/ingest`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-access-token": token },
+        body: JSON.stringify({ value }),
+      });
+      if (r.status === 401) throw new Error("Senha inválida.");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      setMsg(`✓ Adicionado: ${d.title}`);
+      setValue("");
+    } catch (e) {
+      setMsg(String(e instanceof Error ? e.message : e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="meta">Cole um link (post, guia, vídeo) ou texto que valha a pena lembrar.</p>
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="https://… ou anote sua descoberta de farming aqui"
+      />
+      <button onClick={add} disabled={loading}>
+        {loading ? "Salvando…" : "Adicionar ao conhecimento"}
+      </button>
+      {msg && <p className="meta">{msg}</p>}
     </>
   );
 }

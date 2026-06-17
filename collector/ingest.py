@@ -1,11 +1,15 @@
 """Embedding + persistence into knowledge_chunk.
 
-Embeddings go through any OpenAI-compatible endpoint (z.ai by default). The vector
+Embeddings go through any OpenAI-compatible endpoint (Gemini by default). The vector
 dimension must match EMBEDDING_DIM / the DB column (see migration 0001).
+
+`KnowledgeDoc` is the common shape every source (YouTube, RSS, manual) produces; they all
+funnel through `ingest_documents`.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from openai import OpenAI
@@ -18,6 +22,15 @@ if TYPE_CHECKING:
     from collector.community_scraper import CommunityPost
 
 _MAX_CHARS = 8000  # keep each chunk within a sane embedding window
+
+
+@dataclass
+class KnowledgeDoc:
+    """A piece of qualitative community knowledge, ready to embed + store."""
+
+    source_url: str
+    title: str
+    content: str
 
 
 def _embeddings_client() -> OpenAI:
@@ -44,17 +57,23 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     return [item.embedding for item in resp.data]
 
 
-def ingest_posts(posts: list[CommunityPost]) -> int:
-    """Embed each post and upsert into knowledge_chunk (dedup by URL)."""
-    if not posts:
+def ingest_documents(docs: list[KnowledgeDoc]) -> int:
+    """Embed each document and upsert into knowledge_chunk (dedup by source_url)."""
+    docs = [d for d in docs if d.source_url and d.content]
+    if not docs:
         return 0
-    vectors = embed_texts([p.content for p in posts])
-    written = 0
-    for post, vector in zip(posts, vectors, strict=True):
+    vectors = embed_texts([d.content for d in docs])
+    for doc, vector in zip(docs, vectors, strict=True):
         upsert_knowledge_chunk(
             KnowledgeChunk(
-                source_url=post.url, title=post.title, content=post.content, embedding=vector
+                source_url=doc.source_url, title=doc.title, content=doc.content, embedding=vector
             )
         )
-        written += 1
-    return written
+    return len(docs)
+
+
+def ingest_posts(posts: list[CommunityPost]) -> int:
+    """Back-compat for the (dormant) Reddit scraper: CommunityPost -> KnowledgeDoc."""
+    return ingest_documents(
+        [KnowledgeDoc(source_url=p.url, title=p.title, content=p.content) for p in posts]
+    )

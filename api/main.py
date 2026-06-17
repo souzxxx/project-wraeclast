@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import build, chat, farm
+from api.routes import build, chat, farm, ingest
 from collector.config import get_settings
 
 app = FastAPI(title="Project Wraeclast API", version="0.1.0")
@@ -26,6 +26,7 @@ app.add_middleware(
 app.include_router(farm.router)
 app.include_router(build.router)
 app.include_router(chat.router)
+app.include_router(ingest.router)
 
 
 @app.get("/")
