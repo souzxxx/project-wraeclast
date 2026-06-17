@@ -28,6 +28,16 @@ app.include_router(build.router)
 app.include_router(chat.router)
 
 
+@app.get("/")
+def index() -> dict[str, Any]:
+    """Friendly root so the deployment URL isn't a bare 404."""
+    return {
+        "service": "Project Wraeclast API",
+        "league": get_settings().poe2_league,
+        "endpoints": ["/health", "/state", "/farm", "/build", "/chat (POST)", "/docs"],
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "league": get_settings().poe2_league}
