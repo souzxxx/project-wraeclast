@@ -78,6 +78,7 @@ def build_graph(
         if not url:
             continue
         title = chunk.get("title") or url
-        links.append({"source": league_id, "target": _add_node(nodes, f"src:{url}", title, "source")})
+        links.append({"source": league_id, "target": _add_node(
+            nodes, f"src:{url}", title, "source")})
 
     return {"nodes": list(nodes.values()), "links": links}
