@@ -20,6 +20,7 @@ def build_graph(
     guides: list[dict[str, Any]],
     my_snapshot: dict[str, Any] | None,
     prices: list[dict[str, Any]],
+    knowledge: list[dict[str, Any]] | None = None,
     max_currencies: int = 8,
 ) -> dict[str, list[dict[str, Any]]]:
     nodes: dict[str, dict[str, Any]] = {}
@@ -68,5 +69,15 @@ def build_graph(
         if name:
             cur_id = _add_node(nodes, f"cur:{name.lower()}", name, "currency")
             links.append({"source": league_id, "target": cur_id})
+
+    # All community knowledge (YouTube guides etc.) as source nodes hanging off the league.
+    # Shared ids dedup with guide-cited sources: such a node keeps its farm link AND gains a
+    # league link — that's the linked, Obsidian-like structure.
+    for chunk in knowledge or []:
+        url = chunk.get("source_url")
+        if not url:
+            continue
+        title = chunk.get("title") or url
+        links.append({"source": league_id, "target": _add_node(nodes, f"src:{url}", title, "source")})
 
     return {"nodes": list(nodes.values()), "links": links}

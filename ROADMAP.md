@@ -18,8 +18,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [ ] Flag anomalies (a currency that jumped/dropped sharply; a farm that left/entered the top 5).
 
 ## P2 — Features (pick the top unchecked one)
-- [ ] Enrich the Cérebro graph: add ALL `knowledge_chunk` videos as `source` nodes linked to
-      the league (today only guide-cited sources appear). Update `build_graph` + its tests.
+- [x] Enrich the Cérebro graph: add ALL `knowledge_chunk` videos as `source` nodes linked to
+      the league. Update `build_graph` + its tests. _(see Done)_
 - [ ] `/build` meta source: collect a few popular ninja builds for the owner's class so the
       build-diff stops degrading to "not comparable".
 - [ ] Price history: store/show sparklines per currency on the "Hoje" tab (data already in
@@ -37,3 +37,6 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-18** — Enrich the Cérebro graph with all `knowledge_chunk` videos as `source`
+  nodes linked to the league (deduped with guide-cited sources). Designed by the nightly
+  routine (which couldn't push due to missing write access); delivered locally.

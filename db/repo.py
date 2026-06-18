@@ -141,6 +141,14 @@ def replace_farm_guides(league: str, guides: list[dict[str, Any]]) -> int:
     return len(guides)
 
 
+def latest_knowledge_chunks(limit: int = 80) -> list[dict[str, Any]]:
+    """Newest community knowledge (deduped by URL via the table's unique index), for the graph."""
+    return fetch_all(
+        "SELECT source_url, title FROM knowledge_chunk ORDER BY captured_at DESC LIMIT %s",
+        (limit,),
+    )
+
+
 def latest_farm_guides(league: str) -> list[dict[str, Any]]:
     return fetch_all(
         """SELECT name, profit_per_hour, risk, target_currency, overview, steps, items, atlas,
