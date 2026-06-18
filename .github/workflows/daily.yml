@@ -5,9 +5,8 @@ name: Daily collection
 # NOT fit a serverless function's time limit, so it lives here, not on Vercel.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   NEON_DATABASE_URL, GLM_API_KEY, NINJA_ACCOUNT
-# Optional: EMBEDDINGS_API_KEY (enables the community-RAG step), POE2_LEAGUE/NINJA_CHARACTER
-#   (otherwise the code defaults in collector/config.py are used).
+#   NEON_DATABASE_URL, GLM_API_KEY, EMBEDDINGS_API_KEY, YOUTUBE_API_KEY, NINJA_ACCOUNT
+# Optional: POE2_LEAGUE / NINJA_CHARACTER (otherwise the config.py defaults are used).
 
 on:
   schedule:
@@ -36,6 +35,7 @@ jobs:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
           EMBEDDINGS_API_KEY: ${{ secrets.EMBEDDINGS_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           NINJA_ACCOUNT: ${{ secrets.NINJA_ACCOUNT }}
           OBSIDIAN_VAULT_DIR: reports
         run: python -m collector.run_daily
