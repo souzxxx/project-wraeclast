@@ -1,6 +1,7 @@
 """Daily orchestration: the sequence GitHub Actions runs once per day.
 
-ninja_client -> ninja_build_client -> youtube -> rss -> curate -> guides -> export_obsidian.
+ninja_client -> ninja_build_client -> youtube -> rss -> curate -> guides -> export_obsidian
+-> daily_insight.
 Each step is wrapped so one failure is logged and the rest still run (resilient collection).
 Invoked by GitHub Actions: `python -m collector.run_daily`.
 """
@@ -38,7 +39,7 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
         rss_client,
         youtube_client,
     )
-    from scripts import export_obsidian
+    from scripts import daily_insight, export_obsidian
 
     results: dict[str, Any] = {}
     await _step("ninja_economy", ninja_client.run, results)
@@ -49,6 +50,7 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     await _step("curate", lambda: asyncio.to_thread(curate.run), results)
     await _step("guides", lambda: asyncio.to_thread(guides.run), results)
     await _step("export_obsidian", lambda: asyncio.to_thread(export_obsidian.run), results)
+    await _step("daily_insight", lambda: asyncio.to_thread(daily_insight.run), results)
     results["summary"] = {
         "ok_steps": [k for k, v in results.items() if isinstance(v, dict) and v.get("ok")],
         "failed_steps": [k for k, v in results.items() if isinstance(v, dict) and not v.get("ok")],

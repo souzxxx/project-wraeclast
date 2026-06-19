@@ -13,9 +13,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [ ] No secret committed; `.env` stays gitignored.
 
 ## P1 — Daily intelligence layer
-- [ ] Write a concise "what changed today" insight into `reports/` (top farms vs yesterday,
+- [x] Write a concise "what changed today" insight into `reports/` (top farms vs yesterday,
       notable price moves, new community guides) — human-readable, links back to sources.
-- [ ] Flag anomalies (a currency that jumped/dropped sharply; a farm that left/entered the top 5).
+      _(see Done)_
+- [x] Flag anomalies (a currency that jumped/dropped sharply; a farm that left/entered the top 5).
+      _(see Done — same module)_
 
 ## P2 — Features (pick the top unchecked one)
 - [x] Enrich the Cérebro graph: add ALL `knowledge_chunk` videos as `source` nodes linked to
@@ -37,6 +39,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-19** — Daily "what changed today" insight + anomaly flagging (`scripts/daily_insight.py`):
+  day-over-day diff of farm ranking (entered/left/moved within top 5), notable currency price
+  moves (relative + absolute thresholds), and community sources captured today, rendered to an
+  Obsidian-friendly note in `reports/`. Sharp moves and top-5 changes are flagged as anomalies.
+  Pure comparison core is unit-tested offline (10 tests); wired into `run_daily` after the export.
 - **2026-06-18** — Enrich the Cérebro graph with all `knowledge_chunk` videos as `source`
   nodes linked to the league (deduped with guide-cited sources). Designed by the nightly
   routine (which couldn't push due to missing write access); delivered locally.
