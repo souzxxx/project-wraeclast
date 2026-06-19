@@ -159,6 +159,38 @@ def latest_farm_guides(league: str) -> list[dict[str, Any]]:
     )
 
 
+def farm_strategies_since(league: str, days: int = 3) -> list[dict[str, Any]]:
+    """Recent farm strategies (multiple runs) for the day-over-day insight diff."""
+    return fetch_all(
+        """SELECT name, est_profit_per_hour, risk, summary, sources, captured_at
+           FROM farm_strategy
+           WHERE league = %s AND captured_at >= now() - make_interval(days => %s)
+           ORDER BY captured_at DESC, est_profit_per_hour DESC NULLS LAST""",
+        (league, days),
+    )
+
+
+def price_snapshots_since(league: str, days: int = 3) -> list[dict[str, Any]]:
+    """Recent price snapshots (multiple runs) for the day-over-day insight diff."""
+    return fetch_all(
+        """SELECT name, item_type, chaos_value, divine_value, captured_at
+           FROM price_snapshot
+           WHERE league = %s AND captured_at >= now() - make_interval(days => %s)
+           ORDER BY captured_at DESC""",
+        (league, days),
+    )
+
+
+def knowledge_chunks_since(days: int = 2) -> list[dict[str, Any]]:
+    """Knowledge captured in the recent window, for the 'new sources today' insight section."""
+    return fetch_all(
+        """SELECT source_url, title, captured_at FROM knowledge_chunk
+           WHERE captured_at >= now() - make_interval(days => %s)
+           ORDER BY captured_at DESC""",
+        (days,),
+    )
+
+
 def search_knowledge(embedding: list[float], limit: int = 6) -> list[dict[str, Any]]:
     """Cosine-similarity retrieval for RAG. Returns closest chunks first."""
     return fetch_all(
