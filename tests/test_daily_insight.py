@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from scripts.daily_insight import (
+    canonical_farm_key,
     compute_insight,
     farm_ranking_changes,
     notable_price_moves,
@@ -37,6 +38,31 @@ def test_farm_ranking_sorts_by_profit_not_input_order():
     latest = [_farm("Low", 1, T1), _farm("High", 100, T1)]
     _, _, _, top = farm_ranking_changes(latest, [], top_n=5)
     assert top == ["High", "Low"]
+
+
+def test_canonical_farm_key_collapses_mechanic_variants():
+    assert canonical_farm_key("Abyss Lich Farming") == "abyss"
+    assert canonical_farm_key("Abyss Farm") == "abyss"
+    assert canonical_farm_key("Ritual Farm (Omen + Defer)") == "ritual"
+    assert canonical_farm_key("Arbiter of Ash Boss Farm") == "arbiter"  # arbiter before boss
+    assert canonical_farm_key("Wisp Strongboxes") == "wisp"
+    assert canonical_farm_key("Mystery Strat") == "mystery strat"  # fallback, filler stripped
+
+
+def test_farm_ranking_collapses_renames_no_phantom_churn():
+    # Same two farms, renamed by the GLM between runs — must NOT show as left+entered.
+    latest = [_farm("Abyss Farm", 30, T1), _farm("Ritual Farm (Omen + Defer)", 25, T1)]
+    prev = [_farm("Abyss Lich Farming", 28, T0), _farm("Ritual Omen Farm", 26, T0)]
+    entered, left, moves, top = farm_ranking_changes(latest, prev, top_n=5)
+    assert entered == [] and left == []
+    assert top == ["Abyss Farm", "Ritual Farm (Omen + Defer)"]  # latest display names
+
+
+def test_farm_ranking_dedupes_same_day_reruns_by_key():
+    # Two curate runs the same day produced renamed duplicates of one mechanic.
+    latest = [_farm("Abyss Farm", 30, T1), _farm("Abyss Lich Farm", 12, T1)]
+    _, _, _, top = farm_ranking_changes(latest, [], top_n=5)
+    assert top == ["Abyss Farm"]  # one entry, highest-profit name kept
 
 
 # ── price moves ───────────────────────────────────────────────────────────────────

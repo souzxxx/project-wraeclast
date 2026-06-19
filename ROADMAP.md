@@ -22,11 +22,9 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 ## P2 — Features (pick the top unchecked one)
 - [x] Enrich the Cérebro graph: add ALL `knowledge_chunk` videos as `source` nodes linked to
       the league. Update `build_graph` + its tests. _(see Done)_
-- [ ] **Stable farm names across runs.** The GLM renames the same farm each run ("Abyss Lich
-      Farming" / "Abyss Lich Farm" / "Abyss Farm"), so `daily_insight` reports phantom
-      entered/left "anomalies" and the Hoje/Farms tabs drift. Fix at the source: have `curate`
-      (and `guides`) map to a small canonical farm-name set, OR fuzzy-match by normalized name
-      in `daily_insight.farm_ranking_changes`. Add tests. Prefer the canonical-name approach.
+- [x] **Stable farm comparison across runs** — `canonical_farm_key` collapses GLM renames by
+      core mechanic in `daily_insight.farm_ranking_changes`, killing phantom enter/left churn.
+      _(see Done)_
 - [ ] `/build` meta source: collect a few popular ninja builds for the owner's class so the
       build-diff stops degrading to "not comparable".
 - [ ] Price history: store/show sparklines per currency on the "Hoje" tab (data already in
@@ -44,6 +42,10 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-19** — `canonical_farm_key` in `daily_insight`: collapse run-to-run GLM farm
+  renames (e.g. "Abyss Lich Farming"/"Abyss Farm" → `abyss`) by core mechanic, so the
+  day-over-day diff shows real ranking changes, not rename noise. Also dedupes same-day
+  reruns. +4 tests. (Live: phantom anomalies 8 → 2.)
 - **2026-06-19** — Daily "what changed today" insight + anomaly flagging (`scripts/daily_insight.py`):
   day-over-day diff of farm ranking (entered/left/moved within top 5), notable currency price
   moves (relative + absolute thresholds), and community sources captured today, rendered to an

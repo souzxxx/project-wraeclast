@@ -12,6 +12,7 @@ CLI:  python -m scripts.daily_insight
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -118,29 +119,69 @@ def _dedupe_latest(
     return out
 
 
-def _ranked_names(farms: list[dict[str, Any]]) -> list[str]:
-    ordered = sorted(
-        farms, key=lambda f: (f.get("est_profit_per_hour") or 0.0), reverse=True
-    )
-    return [f["name"] for f in ordered if f.get("name")]
+# Core PoE2 farm mechanics — collapse run-to-run GLM renames of the SAME strategy
+# ("Abyss Lich Farming" / "Abyss Lich Farm" / "Abyss Farm" -> "abyss"). Order matters:
+# the first keyword found wins, so list more-specific mechanics before generic ones.
+_FARM_MECHANICS = (
+    "arbiter", "simulacrum", "ultimatum", "expedition", "logbook", "ritual", "abyss",
+    "breach", "delirium", "legion", "blight", "harvest", "essence", "wisp", "strongbox",
+    "tablet", "tower", "boss", "vaal",
+)
+
+
+def canonical_farm_key(name: str) -> str:
+    """Stable key for a farm across run-to-run renames, based on its core mechanic."""
+    text = (name or "").lower()
+    for mech in _FARM_MECHANICS:
+        if mech in text:
+            return mech
+    # Fallback: drop parentheticals + filler words, keep the distinctive remainder.
+    text = re.sub(r"\(.*?\)", " ", text)
+    text = re.sub(r"[^a-z0-9 ]", " ", text)
+    filler = {"farm", "farming", "strategy", "the", "of", "and", "rush", "method"}
+    words = [w for w in text.split() if w not in filler]
+    return " ".join(words[:2]) if words else (text.strip() or "?")
+
+
+def _ranked(farms: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """Dedupe by canonical key (best profit per key) and sort by profit desc.
+
+    Returns (key, display_name) pairs — display name is the highest-profit row for that key,
+    which also collapses multiple same-day runs/renames into one entry.
+    """
+    best: dict[str, tuple[float, str]] = {}
+    for f in farms:
+        name = f.get("name")
+        if not name:
+            continue
+        key = canonical_farm_key(name)
+        profit = f.get("est_profit_per_hour") or 0.0
+        if key not in best or profit > best[key][0]:
+            best[key] = (profit, name)
+    return [(k, n) for k, (_p, n) in sorted(best.items(), key=lambda kv: kv[1][0], reverse=True)]
 
 
 def farm_ranking_changes(
     latest_farms: list[dict[str, Any]], prev_farms: list[dict[str, Any]], top_n: int = TOP_N
 ) -> tuple[list[str], list[str], list[FarmMove], list[str]]:
-    """Return (entered_top, left_top, moves_within_top, current_top_names)."""
-    latest_top = _ranked_names(latest_farms)[:top_n]
-    prev_top = _ranked_names(prev_farms)[:top_n]
-    entered = [n for n in latest_top if n not in prev_top]
-    left = [n for n in prev_top if n not in latest_top]
+    """Return (entered_top, left_top, moves_within_top, current_top_names).
+
+    Membership/rank are compared by canonical key (so a renamed farm isn't phantom churn);
+    display uses the latest names.
+    """
+    latest = _ranked(latest_farms)[:top_n]
+    prev = _ranked(prev_farms)[:top_n]
+    latest_keys = [k for k, _ in latest]
+    prev_keys = [k for k, _ in prev]
+    entered = [n for k, n in latest if k not in prev_keys]
+    left = [n for k, n in prev if k not in latest_keys]
     moves: list[FarmMove] = []
-    for n in latest_top:
-        if n in prev_top:
-            old_rank = prev_top.index(n) + 1
-            new_rank = latest_top.index(n) + 1
+    for new_rank, (k, n) in enumerate(latest, start=1):
+        if k in prev_keys:
+            old_rank = prev_keys.index(k) + 1
             if old_rank != new_rank:
                 moves.append(FarmMove(name=n, from_rank=old_rank, to_rank=new_rank))
-    return entered, left, moves, latest_top
+    return entered, left, moves, [n for _, n in latest]
 
 
 def notable_price_moves(
