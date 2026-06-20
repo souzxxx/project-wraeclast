@@ -18,6 +18,13 @@ type State = {
   my_snapshot: { character_name?: string; char_class?: string; level?: number } | null;
 };
 type ChatResp = { answer: string; sources: { url: string; title: string }[] };
+type Sparkline = {
+  name: string;
+  item_type: string;
+  points: number[];
+  latest: number;
+  change_pct: number | null;
+};
 
 export default function Home() {
   const [state, setState] = useState<State | null>(null);
@@ -75,6 +82,11 @@ export default function Home() {
           ) : (
             state && <p className="meta">No character snapshot yet.</p>
           )}
+        </section>
+
+        <section className="card" style={{ gridColumn: "1 / -1" }}>
+          <h2>Currency price moves (last days)</h2>
+          <PriceSparklines />
         </section>
 
         <section className="card chat" style={{ gridColumn: "1 / -1" }}>
@@ -207,6 +219,64 @@ function Chat() {
         </div>
       )}
     </>
+  );
+}
+
+function Sparkline({ points }: { points: number[] }) {
+  const w = 96;
+  const h = 24;
+  const pad = 2;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = points.length > 1 ? (w - pad * 2) / (points.length - 1) : 0;
+  const d = points
+    .map((p, i) => {
+      const x = pad + i * step;
+      const y = pad + (h - pad * 2) * (1 - (p - min) / span);
+      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const up = points[points.length - 1] >= points[0];
+  return (
+    <svg width={w} height={h} aria-hidden="true">
+      <path d={d} fill="none" stroke={up ? "#5fae6f" : "#e07b53"} strokeWidth={1.5} />
+    </svg>
+  );
+}
+
+function PriceSparklines() {
+  const [series, setSeries] = useState<Sparkline[] | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch(`${API}/price-history`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => setSeries(d.sparklines || []))
+      .catch((e) => setErr(String(e)));
+  }, []);
+
+  if (err) return <p className="meta">Could not load price history ({err}).</p>;
+  if (!series) return <p className="meta">Loading…</p>;
+  if (series.length === 0)
+    return <p className="meta">Not enough price history yet — needs at least two days.</p>;
+
+  return (
+    <div>
+      {series.map((s) => {
+        const chg = s.change_pct;
+        const cls = chg == null ? "flat" : chg > 0 ? "up" : chg < 0 ? "down" : "flat";
+        const label = chg == null ? "—" : `${chg > 0 ? "+" : ""}${chg}%`;
+        return (
+          <div className="spark-row" key={s.name}>
+            <span className="name">{s.name}</span>
+            <Sparkline points={s.points} />
+            <span className="val">{s.latest} c</span>
+            <span className={`chg ${cls}`}>{label}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
