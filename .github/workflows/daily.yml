@@ -10,7 +10,7 @@ name: Daily collection
 
 on:
   schedule:
-    - cron: "0 4 * * *"   # 04:00 UTC daily
+    - cron: "23 2 * * *"  # 02:23 UTC daily — early + off-peak minute to cut the Actions queue delay; the nightly agent runs later and reads this fresh data
   workflow_dispatch:       # manual "Run workflow" button
 
 permissions:

@@ -1,8 +1,9 @@
 # Routine: nightly_agent
 
-> Operating manual for the scheduled cloud agent (runs ~03:00 BRT / 06:00 UTC, after the
-> daily GitHub Actions collection). It assesses everything and does the single highest-value
-> thing it can finish well, then opens a PR for the owner to review. Never merges.
+> Operating manual for the scheduled cloud agent (runs ~07:17 BRT / 10:17 UTC, comfortably
+> after the daily GitHub Actions collection at 02:23 UTC, so it always reads fresh data). It
+> assesses everything and does the single highest-value thing it can finish well, then opens a
+> PR for the owner to review. Never merges.
 
 ## Procedure
 
