@@ -52,11 +52,15 @@ class Settings(BaseSettings):
     # ── Community knowledge sources ──
     # Descriptive User-Agent for all outbound HTTP (ninja, youtube, rss).
     user_agent: str = "Project-Wraeclast/0.1 (contact: souzxxx)"
-    # YouTube Data API v3 (official, free tier): the richest legitimate farming source.
+    # YouTube Data API v3 (official, free tier): the richest legitimate farming + crafting source.
     youtube_api_key: str = ""
     youtube_queries: str = (
+        # Farming / atlas strategy.
         "Path of Exile 2 farming strategy,PoE2 best currency farm,PoE2 atlas strategy,"
-        "PoE2 tablet tower farming,PoE2 atlas tree guide"
+        "PoE2 tablet tower farming,PoE2 atlas tree guide,"
+        # Craft intelligence (epic: rank crafts by calculated EV).
+        "PoE2 crafting guide,PoE2 currency crafting,PoE2 crafting for profit,"
+        "PoE2 essence crafting,PoE2 omen crafting"
     )
     youtube_max_results: int = 8
     youtube_published_days: int = 21

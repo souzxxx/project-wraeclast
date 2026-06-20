@@ -25,11 +25,29 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [x] **Stable farm comparison across runs** — `canonical_farm_key` collapses GLM renames by
       core mechanic in `daily_insight.farm_ranking_changes`, killing phantom enter/left churn.
       _(see Done)_
+### Craft intelligence 👑 (epic — make the agent the "king of craft")
+> Same engine as farms, aimed at crafting: rank methods by **calculated EV** — input cost
+> (via `price_snapshot`) × success chance × output value — never prose. Build it bottom-up,
+> one layer per nightly run. Craft YouTube queries are already seeded in `config.py`.
+- [ ] **Craft 1 — knowledge corpus**: tag craft `knowledge_chunk`s (from the seeded craft
+      queries) so RAG/chat can answer crafting questions; optionally add wiki/guide URLs via
+      `add_knowledge`. Lowest-risk first step — start here.
+- [ ] **Craft 2 — `craft_method` model**: structured methods (item base, ordered steps, inputs
+      `{currency: qty}`, target mods, success probability). Pydantic schema + `db/migrations` + tests.
+- [ ] **Craft 3 — calculated EV** (the differentiator): pure core crossing `craft_method` inputs
+      with `price_snapshot` → expected cost (incl. retries) vs output value → ROI ranked per method.
+      Unit-tested offline, same as farm profit/hour.
+- [ ] **Craft 4 — `craft_guide` (PT-BR)**: GLM generates per-archetype/budget guides, mirroring
+      `guides.py` / `farm_guide`; refreshed daily in `run_daily`. This is the "huge craft guide".
+- [ ] **Craft 5 — site + chat surface**: a "Craft" tab with EV-ranked methods + the guides.
+- [ ] **Craft 6 — craft alerts**: flag when a craft crosses into profit (input dropped / output
+      rose); surface on the site + daily report. _(was the standalone "Craft/price alerts" item)_
+
+### Other features
 - [ ] `/build` meta source: collect a few popular ninja builds for the owner's class so the
       build-diff stops degrading to "not comparable".
 - [x] Price history: store/show sparklines per currency on the "Hoje" tab (data already in
       `price_snapshot` over time). _(see Done)_
-- [ ] Craft/price alerts: detect notable moves and surface them on the site + daily report.
 - [ ] Mobile layout polish for the dashboard, farms, and graph.
 - [ ] Phase 2 (optional, only if the owner enables it): GGG OAuth 2.1 + PKCE for real-time
       stash currency (net worth) and off-ladder characters. Scaffolding in `collector/ggg_client.py`.
