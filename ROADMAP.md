@@ -29,9 +29,10 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 > Same engine as farms, aimed at crafting: rank methods by **calculated EV** — input cost
 > (via `price_snapshot`) × success chance × output value — never prose. Build it bottom-up,
 > one layer per nightly run. Craft YouTube queries are already seeded in `config.py`.
-- [ ] **Craft 1 — knowledge corpus**: tag craft `knowledge_chunk`s (from the seeded craft
-      queries) so RAG/chat can answer crafting questions; optionally add wiki/guide URLs via
-      `add_knowledge`. Lowest-risk first step — start here.
+- [ ] **Craft 1 — knowledge corpus**: _curated seed already done_ — `collector/seed_knowledge.py`
+      ingests 4 source-attributed craft notes (currency/flow, essences, omens, profit) every run,
+      and craft YouTube queries are seeded in `config.py`. **Remaining:** tag/categorise craft
+      `knowledge_chunk`s (e.g. a `topic` field) so RAG/chat can filter craft specifically.
 - [ ] **Craft 2 — `craft_method` model**: structured methods (item base, ordered steps, inputs
       `{currency: qty}`, target mods, success probability). Pydantic schema + `db/migrations` + tests.
 - [ ] **Craft 3 — calculated EV** (the differentiator): pure core crossing `craft_method` inputs
