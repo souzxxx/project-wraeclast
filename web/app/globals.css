@@ -100,6 +100,20 @@ button:disabled { opacity: 0.5; cursor: default; }
 .guide-body .faq .a { color: var(--muted); margin: 0; }
 .chev { color: var(--muted); font-size: 0.7rem; }
 
+/* ── price sparklines (Hoje tab) ── */
+.spark-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+}
+.spark-row:last-child { border-bottom: 0; }
+.spark-row .name { flex: 1; font-size: 0.9rem; }
+.spark-row .val { font-variant-numeric: tabular-nums; color: var(--accent); font-size: 0.9rem; }
+.spark-row .chg { font-variant-numeric: tabular-nums; font-size: 0.8rem; min-width: 3.4rem; text-align: right; }
+.spark-row .chg.up { color: #5fae6f; }
+.spark-row .chg.down { color: #e07b53; }
+.spark-row .chg.flat { color: var(--muted); }
+.spark-row svg { display: block; }
+
 /* ── brain graph ── */
 .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; margin: 0.5rem 0 1rem; font-size: 0.8rem; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }

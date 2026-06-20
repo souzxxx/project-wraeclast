@@ -27,8 +27,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       _(see Done)_
 - [ ] `/build` meta source: collect a few popular ninja builds for the owner's class so the
       build-diff stops degrading to "not comparable".
-- [ ] Price history: store/show sparklines per currency on the "Hoje" tab (data already in
-      `price_snapshot` over time).
+- [x] Price history: store/show sparklines per currency on the "Hoje" tab (data already in
+      `price_snapshot` over time). _(see Done)_
 - [ ] Craft/price alerts: detect notable moves and surface them on the site + daily report.
 - [ ] Mobile layout polish for the dashboard, farms, and graph.
 - [ ] Phase 2 (optional, only if the owner enables it): GGG OAuth 2.1 + PKCE for real-time
@@ -42,6 +42,12 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-20** — Price-history sparklines on the "Hoje" tab. Pure core
+  `api/price_history.build_sparklines` buckets `price_snapshot` rows into one point per
+  calendar day per currency (latest snapshot each day wins, defensive vs intra-day reruns),
+  drops single-point series, and sorts by latest chaos value with a first→last change %.
+  New `db.repo.price_history_since` query + `GET /price-history` route + an inline-SVG
+  sparkline list on the home page (green/red trend, change %). +9 offline tests.
 - **2026-06-19** — `canonical_farm_key` in `daily_insight`: collapse run-to-run GLM farm
   renames (e.g. "Abyss Lich Farming"/"Abyss Farm" → `abyss`) by core mechanic, so the
   day-over-day diff shows real ranking changes, not rename noise. Also dedupes same-day

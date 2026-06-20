@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import build, chat, farm, graph, ingest
+from api.routes import build, chat, farm, graph, ingest, price
 from collector.config import get_settings
 
 app = FastAPI(title="Project Wraeclast API", version="0.1.0")
@@ -29,6 +29,7 @@ app.include_router(build.router)
 app.include_router(chat.router)
 app.include_router(ingest.router)
 app.include_router(graph.router)
+app.include_router(price.router)
 
 
 @app.get("/")
@@ -37,7 +38,9 @@ def index() -> dict[str, Any]:
     return {
         "service": "Project Wraeclast API",
         "league": get_settings().poe2_league,
-        "endpoints": ["/health", "/state", "/farm", "/build", "/chat (POST)", "/docs"],
+        "endpoints": [
+            "/health", "/state", "/farm", "/build", "/price-history", "/chat (POST)", "/docs",
+        ],
     }
 
 
