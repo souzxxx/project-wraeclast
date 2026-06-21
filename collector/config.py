@@ -43,7 +43,15 @@ class Settings(BaseSettings):
     ninja_base_url: str = "https://poe.ninja"
     # PoE2 economy = the currency-exchange overview (confirmed live; classic /api/data 404s).
     ninja_economy_path: str = "/poe2/api/economy/exchange/0/overview"
-    ninja_economy_type: str = "Currency"
+    ninja_economy_type: str = "Currency"  # single type used by the `explore` CLI
+    # The full craft surface lives across several poe.ninja "type" categories (confirmed via
+    # exploratory GETs, 2026-06-21). "<NinjaType>:<item_type>" pairs — the EV engine prices a
+    # method's inputs by NAME across all of these, while the bench/sparklines still filter to
+    # item_type='currency'. Override via env if poe.ninja renames a category.
+    ninja_economy_types: str = (
+        "Currency:currency,Essences:essence,Runes:rune,SoulCores:soul_core,"
+        "Ritual:ritual,Delirium:delirium,Breach:breach,Abyss:abyss,Expedition:expedition"
+    )
     # PoE2 public profile characters: <base>/<account>/<version> returns a JSON list of chars.
     ninja_profile_path: str = "/poe2/api/profile/characters"
     ninja_account: str = ""
@@ -74,6 +82,18 @@ class Settings(BaseSettings):
     @property
     def rss_feed_list(self) -> list[str]:
         return [f.strip() for f in self.rss_feeds.split(",") if f.strip()]
+
+    @property
+    def ninja_economy_category_list(self) -> list[tuple[str, str]]:
+        """Parse `ninja_economy_types` into (ninja_type, item_type) pairs. A bare entry with no
+        ':' defaults its item_type to 'currency'."""
+        pairs: list[tuple[str, str]] = []
+        for part in self.ninja_economy_types.split(","):
+            ninja_type, _, item_type = part.strip().partition(":")
+            ninja_type = ninja_type.strip()
+            if ninja_type:
+                pairs.append((ninja_type, item_type.strip() or "currency"))
+        return pairs
 
     # ── GGG OAuth (Phase 2, optional) ──
     ggg_client_id: str = ""

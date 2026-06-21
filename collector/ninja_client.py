@@ -38,8 +38,10 @@ def _num(value: Any) -> float | None:
         return None
 
 
-def normalize_exchange(payload: dict[str, Any], league: str) -> list[PriceSnapshot]:
-    """Parse the PoE2 currency-exchange overview into PriceSnapshot rows.
+def normalize_exchange(
+    payload: dict[str, Any], league: str, item_type: str = "currency"
+) -> list[PriceSnapshot]:
+    """Parse a PoE2 exchange overview (any category) into PriceSnapshot rows tagged `item_type`.
 
     lines[i] holds the price (`primaryValue`, denominated in core.primary); items[i] holds
     the name. They are parallel by index and share an `id`. Defensive against length drift.
@@ -67,7 +69,7 @@ def normalize_exchange(payload: dict[str, Any], league: str) -> list[PriceSnapsh
         out.append(
             PriceSnapshot(
                 league=league,
-                item_type="currency",
+                item_type=item_type,
                 name=name,
                 chaos_value=chaos_value,
                 divine_value=divine_value,
@@ -77,19 +79,30 @@ def normalize_exchange(payload: dict[str, Any], league: str) -> list[PriceSnapsh
     return out
 
 
-async def _get_economy(http: HttpClient, settings: Settings, cache_ttl: float) -> dict[str, Any]:
+async def _get_category(
+    http: HttpClient, settings: Settings, ninja_type: str, cache_ttl: float
+) -> dict[str, Any]:
     return await http.get_json(
         settings.ninja_economy_path,
-        params={"league": settings.poe2_league, "type": settings.ninja_economy_type},
+        params={"league": settings.poe2_league, "type": ninja_type},
         cache_ttl=cache_ttl,
     )
 
 
 async def fetch_economy(settings: Settings | None = None) -> list[PriceSnapshot]:
+    """Fetch every configured craft-surface category (currency, essences, omens via Ritual,
+    catalysts via Breach, liquid emotions via Delirium, runes, soul cores, abyss, expedition) and
+    tag each with its item_type. One bad category is logged and skipped, not fatal."""
     settings = settings or get_settings()
+    rows: list[PriceSnapshot] = []
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await _get_economy(http, settings, CACHE_TTL)
-    return normalize_exchange(payload, settings.poe2_league)
+        for ninja_type, item_type in settings.ninja_economy_category_list:
+            try:
+                payload = await _get_category(http, settings, ninja_type, CACHE_TTL)
+            except Exception:  # noqa: BLE001 — one bad/renamed category shouldn't sink the rest
+                continue
+            rows += normalize_exchange(payload, settings.poe2_league, item_type)
+    return rows
 
 
 async def run() -> int:
@@ -105,7 +118,7 @@ async def explore() -> None:
     """GET the configured economy endpoint and dump raw JSON — confirm shape before modeling."""
     settings = get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        data = await _get_economy(http, settings, 0)
+        data = await _get_category(http, settings, settings.ninja_economy_type, 0)
     if isinstance(data, dict):
         sample = {k: (v[:2] if isinstance(v, list) else v) for k, v in data.items()}
     else:
