@@ -6,7 +6,9 @@ import { usePathname } from "next/navigation";
 const TABS: [string, string][] = [
   ["/", "Hoje"],
   ["/farms", "Farms"],
+  ["/craft", "Craft"],
   ["/cerebro", "Cérebro"],
+  ["/chat", "Chat"],
 ];
 
 export default function Nav() {
