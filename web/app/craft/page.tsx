@@ -44,8 +44,14 @@ function fmt(n: number): string {
 // Near-zero-cost crafts produce astronomical ROI %, so show those as a multiplier instead.
 function fmtRoi(roi: number | null): string {
   if (roi == null) return "—";
-  if (roi >= 1000) return `${Math.round(roi / 100)}×`;
+  if (roi >= 1000) return `+${(roi / 100).toFixed(1)}×`;
+  if (roi === 0) return "0%";
   return `${roi > 0 ? "+" : ""}${roi}%`;
+}
+
+function roiClass(roi: number | null): "up" | "down" | "flat" {
+  if (roi == null || roi === 0) return "flat";
+  return roi > 0 ? "up" : "down";
 }
 
 function pct(p: number | null): string {
@@ -56,8 +62,8 @@ function Mechs({ list }: { list: string[] }) {
   if (!list?.length) return null;
   return (
     <div className="mech-chips">
-      {list.map((m) => (
-        <span className="mech" key={m}>
+      {list.map((m, idx) => (
+        <span className="mech" key={`${m}-${idx}`}>
           {m}
         </span>
       ))}
@@ -107,7 +113,7 @@ function CraftRanking() {
       {methods && methods.length > 0 && (
         <div className="ev-list">
           {methods.map((m, i) => {
-            const cls = m.roi_pct == null ? "flat" : m.roi_pct >= 0 ? "up" : "down";
+            const cls = roiClass(m.roi_pct);
             return (
               <div className="ev-row card" key={i}>
                 <div className="ev-rank">{i + 1}</div>
@@ -163,19 +169,24 @@ function CraftGuideList() {
       )}
       <div className="guides">
         {guides?.map((g, i) => {
-          const cls = g.roi_pct == null ? "flat" : g.roi_pct >= 0 ? "up" : "down";
+          const cls = roiClass(g.roi_pct);
           return (
             <article className="card guide" key={i}>
-              <button className="guide-head" onClick={() => setOpen(open === i ? null : i)}>
+              <button
+                className="guide-head"
+                onClick={() => setOpen(open === i ? null : i)}
+                aria-expanded={open === i}
+                aria-controls={`craft-guide-${i}`}
+              >
                 <span className="name">{g.name}</span>
                 <span className="meta">
                   {g.roi_pct != null && <span className={`roi ${cls}`}>{fmtRoi(g.roi_pct)}</span>}
                   {g.budget && <span className="tag">{g.budget}</span>}
-                  <span className="chev">{open === i ? "▲" : "▼"}</span>
+                  <span className="chev" aria-hidden="true">{open === i ? "▲" : "▼"}</span>
                 </span>
               </button>
               {open === i && (
-                <div className="guide-body">
+                <div className="guide-body" id={`craft-guide-${i}`}>
                   <Mechs list={g.mechanics} />
                   {g.expected_cost_div != null && (
                     <p className="meta">

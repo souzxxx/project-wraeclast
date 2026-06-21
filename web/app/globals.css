@@ -554,7 +554,7 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 .ev-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  align-items: center;
+  align-items: start;
   gap: 1.1rem;
   padding: 0.9rem 1.25rem;
 }
@@ -569,8 +569,8 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 .ev-main { min-width: 0; }
 .ev-name { font-family: var(--font-display); font-size: 1.02rem; color: var(--text); letter-spacing: 0.02em; }
 .ev-main .meta { font-size: 0.85rem; }
-.ev-econ { text-align: right; display: flex; flex-direction: column; gap: 0.1rem; white-space: nowrap; }
-.roi { font-family: var(--font-mono); font-size: 1.18rem; font-variant-numeric: tabular-nums; }
+.ev-econ { text-align: right; display: flex; flex-direction: column; gap: 0.1rem; }
+.roi { font-family: var(--font-mono); font-size: 1.18rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .roi.up { color: var(--up); }
 .roi.down { color: var(--down); }
 .roi.flat { color: var(--muted); }
@@ -579,11 +579,11 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 .mech-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
 .mech {
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   padding: 0.1rem 0.45rem;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   color: var(--muted);
   background: rgba(255, 255, 255, 0.015);
