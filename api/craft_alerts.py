@@ -27,7 +27,8 @@ class CraftAlert(BaseModel):
     mechanics: list[str] = Field(default_factory=list)
 
 
-def _as_date(value: Any) -> date | None:
+def as_date(value: Any) -> date | None:
+    """Coerce a captured_at (datetime / date / ISO string) to a date. Shared by daily_insight."""
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
@@ -46,7 +47,7 @@ def split_two_days(
     """Bucket price rows by captured_at date; return (latest day, previous day)."""
     by_date: dict[date, list[dict[str, Any]]] = {}
     for r in price_rows:
-        d = _as_date(r.get("captured_at"))
+        d = as_date(r.get("captured_at"))
         if d is not None:
             by_date.setdefault(d, []).append(r)
     days = sorted(by_date, reverse=True)
@@ -73,7 +74,9 @@ def craft_alerts(
         prev = method_ev(m, pi, pd)
         if not (today["priced"] and prev["priced"]):
             continue
-        rt, rp = today["roi_pct"], prev["roi_pct"]
+        # crossing is decided on the EXACT (unrounded) ROI so a barely-profitable craft whose
+        # display ROI rounds to 0 can't fabricate or hide a profit-line crossing.
+        rt, rp = today["roi_pct_exact"], prev["roi_pct_exact"]
         if rt is None or rp is None:
             continue
         if rp <= 0 < rt:
@@ -86,8 +89,8 @@ def craft_alerts(
             CraftAlert(
                 name=m.get("name") or "?",
                 kind=kind,
-                from_roi=rp,
-                to_roi=rt,
+                from_roi=prev["roi_pct"],  # rounded, for display
+                to_roi=today["roi_pct"],
                 cost_div=today["expected_cost_div"],
                 mechanics=m.get("mechanics") or [],
             )

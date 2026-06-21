@@ -40,6 +40,15 @@ def test_no_alert_when_profit_sign_unchanged():
     assert craft_alerts([M], prices(300), prices(250)) == []  # both at a loss
 
 
+def test_no_false_crossing_from_rounding_near_zero():
+    # both days are genuinely profitable but tiny: exact ROI ~+0.4% (rounds to 0) and ~+1.4%
+    # (rounds to 1). The OLD rounded-int comparison would fire a spurious into_profit; the exact
+    # comparison must not.
+    # 10 exalts @50/200 chaos = 0.5 div cost; output 0.502 div -> ROI +0.4% prev, +1.4% today
+    thin = {"name": "Thin", "inputs": {EXP: 10}, "success_prob": 1.0, "output_value_div": 0.502}
+    assert craft_alerts([thin], prices(9.9), prices(10)) == []
+
+
 def test_skips_methods_unpriced_on_either_day():
     m = {"name": "X", "inputs": {"Mystery Orb": 1}, "success_prob": 1.0, "output_value_div": 5}
     assert craft_alerts([m], prices(50), prices(200)) == []

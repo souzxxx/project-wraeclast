@@ -13,13 +13,19 @@ CLI:  python -m scripts.daily_insight
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from api.craft_alerts import CraftAlert, craft_alert_lines, craft_alerts
+from api.craft_alerts import (
+    CraftAlert,
+    as_date,
+    craft_alert_lines,
+    craft_alerts,
+    split_two_days,
+)
 from collector.config import get_settings
 
 # Thresholds. A move must clear BOTH the relative and absolute bars to count as "notable"
@@ -78,35 +84,6 @@ class DailyInsight(BaseModel):
 
 # ── helpers (pure) ──────────────────────────────────────────────────────────────────
 
-def _to_date(value: Any) -> date | None:
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value).date()
-        except ValueError:
-            return None
-    return None
-
-
-def _split_two_latest_days(
-    rows: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Bucket rows by their captured_at date; return (latest day, previous day)."""
-    by_date: dict[date, list[dict[str, Any]]] = {}
-    for r in rows:
-        d = _to_date(r.get("captured_at"))
-        if d is None:
-            continue
-        by_date.setdefault(d, []).append(r)
-    days = sorted(by_date, reverse=True)
-    latest = by_date[days[0]] if days else []
-    previous = by_date[days[1]] if len(days) > 1 else []
-    return latest, previous
-
-
 def _dedupe_latest(
     rows: list[dict[str, Any]], key: tuple[str, ...]
 ) -> dict[tuple[Any, ...], dict[str, Any]]:
@@ -115,8 +92,8 @@ def _dedupe_latest(
     for r in rows:
         k = tuple(r.get(field) for field in key)
         prev = out.get(k)
-        if prev is None or (_to_date(r.get("captured_at")) or date.min) >= (
-            _to_date(prev.get("captured_at")) or date.min
+        if prev is None or (as_date(r.get("captured_at")) or date.min) >= (
+            as_date(prev.get("captured_at")) or date.min
         ):
             out[k] = r
     return out
@@ -217,7 +194,7 @@ def notable_price_moves(
 
 
 def _new_sources(knowledge_rows: list[dict[str, Any]]) -> list[NewSource]:
-    latest, _ = _split_two_latest_days(knowledge_rows)
+    latest, _ = split_two_days(knowledge_rows)
     seen: set[str] = set()
     out: list[NewSource] = []
     for r in latest:
@@ -239,8 +216,8 @@ def compute_insight(
 ) -> DailyInsight:
     """Pure core: turn recent (multi-day) rows into a structured daily diff with anomalies."""
     today = today or date.today()
-    latest_farms, prev_farms = _split_two_latest_days(farm_rows)
-    latest_prices, prev_prices = _split_two_latest_days(price_rows)
+    latest_farms, prev_farms = split_two_days(farm_rows)
+    latest_prices, prev_prices = split_two_days(price_rows)
 
     entered, left, moves, current_top = farm_ranking_changes(latest_farms, prev_farms)
     price_moves = notable_price_moves(latest_prices, prev_prices)

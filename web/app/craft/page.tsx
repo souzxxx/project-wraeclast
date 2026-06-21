@@ -109,17 +109,22 @@ function CraftAlerts() {
   if (!alerts || alerts.length === 0) return null;
 
   return (
-    <section className="craft-alerts" aria-label="Alertas de craft de hoje">
+    <section
+      className="craft-alerts"
+      aria-label="Alertas de craft de hoje"
+      role="status"
+      aria-live="polite"
+    >
       <h2>🔔 Mudou de status hoje</h2>
-      {alerts.map((a, i) => (
-        <div className={`alert ${a.kind === "into_profit" ? "into" : "out"}`} key={i}>
+      {alerts.map((a) => (
+        <div className={`alert ${a.kind === "into_profit" ? "into" : "out"}`} key={a.name}>
           <span className="dot" aria-hidden="true" />
           <span className="atext">
             <strong>{a.name}</strong>{" "}
             {a.kind === "into_profit"
-              ? `cruzou pra lucro — ROI ${a.from_roi}% → ${fmtRoi(a.to_roi)}` +
+              ? `cruzou pra lucro — ROI ${fmtRoi(a.from_roi)} → ${fmtRoi(a.to_roi)}` +
                 (a.cost_div != null ? ` (~${fmt(a.cost_div)} div)` : "")
-              : `saiu do lucro — ROI ${a.from_roi}% → ${a.to_roi}%`}
+              : `saiu do lucro — ROI ${fmtRoi(a.from_roi)} → ${fmtRoi(a.to_roi)}`}
           </span>
         </div>
       ))}
