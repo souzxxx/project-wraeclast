@@ -135,6 +135,20 @@ def test_render_includes_frontmatter_and_estimate_disclaimer():
     assert "first baseline" in md.lower()  # no prev day
 
 
+def test_compute_insight_includes_craft_alerts_and_renders():
+    method = {"name": "Cheap Craft", "inputs": {"Exalted Orb": 10}, "success_prob": 1.0,
+              "output_value_div": 5}
+    prices = [
+        _price("Exalted Orb", 50, T1), _price("Divine Orb", 200, T1),  # cheap today
+        _price("Exalted Orb", 200, T0), _price("Divine Orb", 200, T0),  # dear yesterday
+    ]
+    ins = compute_insight("L", [], prices, [], craft_method_rows=[method], today=date(2026, 6, 19))
+    assert [a.kind for a in ins.craft_alerts] == ["into_profit"]
+    assert any("crossed into profit" in a for a in ins.anomalies)
+    md = render_insight(ins)
+    assert "## Craft alerts" in md and "Cheap Craft" in md
+
+
 def test_render_links_new_sources_and_lists_anomalies():
     farms = [_farm("A", 10, T1), _farm("B", 8, T1), _farm("A", 8, T0)]
     prices = [_price("Mirror", 300, T1), _price("Mirror", 100, T0)]

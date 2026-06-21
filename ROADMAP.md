@@ -42,8 +42,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       _(see Done)_
 - [x] **Craft 5 — site + chat surface**: a "Craft" tab with EV-ranked methods + the guides.
       _(see Done — chat surface already shipped in Craft 3.5)_
-- [ ] **Craft 6 — craft alerts**: flag when a craft crosses into profit (input dropped / output
-      rose); surface on the site + daily report. _(was the standalone "Craft/price alerts" item)_
+- [x] **Craft 6 — craft alerts**: flag when a craft crosses into profit (input dropped / output
+      rose); surface on the site + daily report. _(see Done — the craft epic is complete 👑)_
 
 ### Other features
 - [ ] `/build` meta source: collect a few popular ninja builds for the owner's class so the
@@ -62,6 +62,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-21** — Craft 6: craft profit alerts (**craft epic complete 👑**). Pure
+  `api/craft_alerts.craft_alerts` diffs craft EV across the two latest price days → flags methods
+  that crossed INTO / OUT of profit (driver = live input prices). Wired into `scripts/daily_insight`
+  (a "Craft alerts" report section + an anomaly line) and exposed via `GET /craft/alerts`, surfaced
+  as a banner atop the Craft tab. Conservative (only fires on a real 0%-line crossing). +7 tests.
 - **2026-06-21** — Craft 5: site surface. The "Craft" tab now leads with **EV-ranked methods**
   (`GET /craft/ev`, ROI ranking with cost/mechanics/priced flag, green/red ROI, near-zero-cost
   shown as a multiplier), the **PT-BR guides** accordion (`GET /craft/guides` — overview/steps/

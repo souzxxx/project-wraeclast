@@ -19,6 +19,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from api.craft_alerts import CraftAlert, craft_alert_lines, craft_alerts
 from collector.config import get_settings
 
 # Thresholds. A move must clear BOTH the relative and absolute bars to count as "notable"
@@ -60,6 +61,7 @@ class DailyInsight(BaseModel):
     farm_moves: list[FarmMove] = Field(default_factory=list)
     price_moves: list[PriceMove] = Field(default_factory=list)
     new_sources: list[NewSource] = Field(default_factory=list)
+    craft_alerts: list[CraftAlert] = Field(default_factory=list)
     anomalies: list[str] = Field(default_factory=list)
 
     @property
@@ -70,6 +72,7 @@ class DailyInsight(BaseModel):
             or self.farm_moves
             or self.price_moves
             or self.new_sources
+            or self.craft_alerts
         )
 
 
@@ -231,6 +234,7 @@ def compute_insight(
     farm_rows: list[dict[str, Any]],
     price_rows: list[dict[str, Any]],
     knowledge_rows: list[dict[str, Any]],
+    craft_method_rows: list[dict[str, Any]] | None = None,
     today: date | None = None,
 ) -> DailyInsight:
     """Pure core: turn recent (multi-day) rows into a structured daily diff with anomalies."""
@@ -241,6 +245,7 @@ def compute_insight(
     entered, left, moves, current_top = farm_ranking_changes(latest_farms, prev_farms)
     price_moves = notable_price_moves(latest_prices, prev_prices)
     new_sources = _new_sources(knowledge_rows)
+    alerts = craft_alerts(craft_method_rows or [], latest_prices, prev_prices)
     has_baseline = bool(prev_farms or prev_prices)
 
     anomalies: list[str] = []
@@ -255,6 +260,9 @@ def compute_insight(
                 f"{m.name} {direction} {m.pct:+.0f}% "
                 f"({m.from_chaos} → {m.to_chaos} chaos)"
             )
+    for a in alerts:
+        if a.kind == "into_profit":
+            anomalies.append(f"Craft crossed into profit: {a.name} (ROI now {a.to_roi}%)")
 
     return DailyInsight(
         league=league,
@@ -266,6 +274,7 @@ def compute_insight(
         farm_moves=moves,
         price_moves=price_moves,
         new_sources=new_sources,
+        craft_alerts=alerts,
         anomalies=anomalies,
     )
 
@@ -321,6 +330,12 @@ def render_insight(insight: DailyInsight) -> str:
     else:
         lines.append("_No moves past the threshold._")
 
+    lines += ["", "## Craft alerts", ""]
+    if insight.craft_alerts:
+        lines += craft_alert_lines(insight.craft_alerts)
+    else:
+        lines.append("_No craft crossed the profit line today._")
+
     lines += ["", "## New community sources today", ""]
     if insight.new_sources:
         for s in insight.new_sources:
@@ -336,6 +351,7 @@ def run() -> str:
     from db.repo import (
         farm_strategies_since,
         knowledge_chunks_since,
+        latest_craft_methods,
         price_snapshots_since,
     )
 
@@ -346,6 +362,7 @@ def run() -> str:
         farm_rows=farm_strategies_since(league, days=3),
         price_rows=price_snapshots_since(league, days=3),
         knowledge_rows=knowledge_chunks_since(days=2),
+        craft_method_rows=latest_craft_methods(league),
     )
     out_dir = Path(settings.obsidian_vault_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

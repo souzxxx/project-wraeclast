@@ -590,6 +590,28 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 }
 .guide-body .mech-chips { margin: 0 0 0.7rem; }
 
+/* craft alerts banner (Craft 6) */
+.craft-alerts { margin: 1.6rem 0 0; }
+.craft-alerts > h2 { margin-bottom: 0.7rem; }
+.craft-alerts .alert {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 1.05rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-size: 0.95rem;
+}
+.craft-alerts .alert.into { border-left: 3px solid var(--up); color: var(--up); }
+.craft-alerts .alert.out { border-left: 3px solid var(--down); color: var(--down); }
+.craft-alerts .alert .dot {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: currentColor; box-shadow: 0 0 8px currentColor;
+}
+.craft-alerts .alert .atext { color: var(--text); }
+
 @media (max-width: 560px) {
   .ev-row { grid-template-columns: auto 1fr; }
   .ev-econ { grid-column: 2; text-align: left; align-items: flex-start; margin-top: 0.3rem; }

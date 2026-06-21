@@ -79,11 +79,51 @@ export default function CraftPage() {
         O que vale craftar agora (rankeado por ROI calculado dos preços vivos), os guias
         passo-a-passo, e a bancada pra você treinar o fluxo antes de gastar divine.
       </p>
+      <CraftAlerts />
       <CraftRanking />
       <CraftGuideList />
       <Bench />
       <CraftKnowledge />
     </main>
+  );
+}
+
+type Alert = {
+  name: string;
+  kind: "into_profit" | "out_of_profit";
+  from_roi: number | null;
+  to_roi: number | null;
+  cost_div: number | null;
+};
+
+function CraftAlerts() {
+  const [alerts, setAlerts] = useState<Alert[] | null>(null);
+
+  useEffect(() => {
+    fetch(`${API}/craft/alerts`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((d) => setAlerts(d.alerts || []))
+      .catch(() => setAlerts([]));
+  }, []);
+
+  if (!alerts || alerts.length === 0) return null;
+
+  return (
+    <section className="craft-alerts" aria-label="Alertas de craft de hoje">
+      <h2>🔔 Mudou de status hoje</h2>
+      {alerts.map((a, i) => (
+        <div className={`alert ${a.kind === "into_profit" ? "into" : "out"}`} key={i}>
+          <span className="dot" aria-hidden="true" />
+          <span className="atext">
+            <strong>{a.name}</strong>{" "}
+            {a.kind === "into_profit"
+              ? `cruzou pra lucro — ROI ${a.from_roi}% → ${fmtRoi(a.to_roi)}` +
+                (a.cost_div != null ? ` (~${fmt(a.cost_div)} div)` : "")
+              : `saiu do lucro — ROI ${a.from_roi}% → ${a.to_roi}%`}
+          </span>
+        </div>
+      ))}
+    </section>
   );
 }
 

@@ -32,6 +32,18 @@ def get_craft_guides() -> dict[str, Any]:
     return {"league": league, "guides": latest_craft_guides(league)}
 
 
+@router.get("/alerts")
+def get_craft_alerts() -> dict[str, Any]:
+    """Crafts that crossed the profit line vs the previous collection (input prices moved)."""
+    from api.craft_alerts import craft_alerts, split_two_days
+    from db.repo import latest_craft_methods, price_snapshots_since
+
+    league = get_settings().poe2_league
+    latest, prev = split_two_days(price_snapshots_since(league, days=4))
+    alerts = craft_alerts(latest_craft_methods(league), latest, prev)
+    return {"league": league, "alerts": [a.model_dump() for a in alerts]}
+
+
 @router.get("/ev")
 def get_craft_ev() -> dict[str, Any]:
     """Craft methods ranked by ROI — expected cost (live-priced inputs, incl. retries) vs the
