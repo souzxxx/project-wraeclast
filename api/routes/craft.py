@@ -23,6 +23,15 @@ def get_craft_knowledge(limit: int = 30) -> dict[str, Any]:
     }
 
 
+@router.get("/guides")
+def get_craft_guides() -> dict[str, Any]:
+    """Full PT-BR craft tutorials (the 'Craft' tab), best ROI first."""
+    from db.repo import latest_craft_guides
+
+    league = get_settings().poe2_league
+    return {"league": league, "guides": latest_craft_guides(league)}
+
+
 @router.get("/ev")
 def get_craft_ev() -> dict[str, Any]:
     """Craft methods ranked by ROI — expected cost (live-priced inputs, incl. retries) vs the

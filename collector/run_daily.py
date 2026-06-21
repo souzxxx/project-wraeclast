@@ -32,6 +32,7 @@ async def _step(
 
 async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     from collector import (
+        craft_guides,
         curate,
         guides,
         ninja_build_client,
@@ -55,6 +56,8 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     # curate + guides + export are sync; run them off the event loop thread.
     await _step("curate", lambda: asyncio.to_thread(curate.run), results)
     await _step("guides", lambda: asyncio.to_thread(guides.run), results)
+    # craft guides (Craft 4) need the seeded methods + prices above; run after them.
+    await _step("craft_guides", lambda: asyncio.to_thread(craft_guides.run), results)
     await _step("export_obsidian", lambda: asyncio.to_thread(export_obsidian.run), results)
     await _step("daily_insight", lambda: asyncio.to_thread(daily_insight.run), results)
     results["summary"] = {

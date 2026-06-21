@@ -196,6 +196,42 @@ def latest_craft_knowledge(limit: int = 30) -> list[dict[str, Any]]:
     )
 
 
+def replace_craft_guides(league: str, guides: list[dict[str, Any]]) -> int:
+    """Replace this league's PT-BR craft guides with a fresh batch (mirrors replace_farm_guides)."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM craft_guide WHERE league = %s", (league,))
+            cur.executemany(
+                """INSERT INTO craft_guide
+                   (league, name, item_base, archetype, budget, mechanics, expected_cost_div,
+                    roi_pct, overview, steps, items, faq, sources)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                [
+                    (
+                        league, g.get("name"), g.get("item_base"), g.get("archetype"),
+                        g.get("budget"), json.dumps(g.get("mechanics", [])),
+                        g.get("expected_cost_div"), g.get("roi_pct"), g.get("overview"),
+                        json.dumps(g.get("steps", [])), json.dumps(g.get("items", [])),
+                        json.dumps(g.get("faq", [])), json.dumps(g.get("sources", [])),
+                    )
+                    for g in guides
+                ],
+            )
+        conn.commit()
+    return len(guides)
+
+
+def latest_craft_guides(league: str) -> list[dict[str, Any]]:
+    """This league's craft guides, best ROI first (NULLs last), for the Craft tab."""
+    return fetch_all(
+        """SELECT name, item_base, archetype, budget, mechanics, expected_cost_div, roi_pct,
+                  overview, steps, items, faq, sources, captured_at
+           FROM craft_guide WHERE league = %s
+           ORDER BY roi_pct DESC NULLS LAST""",
+        (league,),
+    )
+
+
 def latest_farm_guides(league: str) -> list[dict[str, Any]]:
     return fetch_all(
         """SELECT name, profit_per_hour, risk, target_currency, overview, steps, items, atlas,
