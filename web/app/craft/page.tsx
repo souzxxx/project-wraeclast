@@ -115,7 +115,8 @@ export default function CraftPage() {
 
       <div className="bench">
         {/* the item altar */}
-        <div className={`altar${slam ? " slam" : ""}`} data-rarity={item.rarity} key={slam}>
+        <div className="altar" data-rarity={item.rarity}>
+          {slam > 0 && <span className="altar-flash" key={slam} aria-hidden="true" />}
           <div>
             <div className="item-base">{item.name}</div>
             <div className="item-ilvl">
@@ -161,6 +162,7 @@ export default function CraftPage() {
                   style={{ "--orb": orb.color } as React.CSSProperties}
                   disabled={!canApply(base, item, orb.id)}
                   onClick={() => onOrb(orb)}
+                  aria-label={`${orb.label}: ${orb.blurb}`}
                   title={`${orb.blurb}${orb.priceName ? "" : " (sem preço)"}`}
                 >
                   <span className="bead" />
@@ -168,8 +170,12 @@ export default function CraftPage() {
                 </button>
               ))}
             </div>
-            <p className={`bench-log ${log ? (log.ok ? "ok" : "no") : ""}`}>
-              {log ? log.text : " "}
+            <p
+              className={`bench-log ${log ? (log.ok ? "ok" : "no") : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              {log ? `${log.ok ? "OK" : "—"} ${log.text}` : " "}
             </p>
             <div className="bench-actions">
               <button className="btn-ghost" onClick={undo} disabled={past.length === 0}>

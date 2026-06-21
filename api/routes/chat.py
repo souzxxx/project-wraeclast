@@ -27,8 +27,10 @@ class ChatTurn(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    # Prior turns for multi-turn chat; bounded so a long thread can't blow up the request.
-    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
+    # Prior messages for multi-turn chat; bounded so a long thread can't blow up the request.
+    # Only the most recent few are actually replayed (see rag._MAX_HISTORY_MESSAGES); the client
+    # already trims to this window, so this is a defensive cap.
+    history: list[ChatTurn] = Field(default_factory=list, max_length=12)
 
 
 def _check_access(provided: str | None) -> None:

@@ -98,7 +98,7 @@ export default function CerebroPage() {
 
         {selected && (
           <div className="node-panel">
-            <button className="close" onClick={() => setSelected(null)}>
+            <button className="close" aria-label="Fechar" onClick={() => setSelected(null)}>
               ✕
             </button>
             <span className="tag" style={{ borderColor: TYPE_COLORS[selected.type] }}>

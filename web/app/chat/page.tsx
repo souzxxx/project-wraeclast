@@ -40,7 +40,9 @@ export default function ChatPage() {
   async function send() {
     const question = input.trim();
     if (!question || loading) return;
-    const history = messages.map((m) => ({ role: m.role, content: m.content }));
+    // send only the recent window (server replays the last few; this caps payload + matches the
+    // server's history bound so a long thread never trips request validation).
+    const history = messages.slice(-12).map((m) => ({ role: m.role, content: m.content }));
     setMessages((m) => [...m, { role: "user", content: question }]);
     setInput("");
     setLoading(true);
@@ -58,6 +60,8 @@ export default function ChatPage() {
       if (r.status === 503) throw new Error("Chat ainda não configurado no servidor.");
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
+      if (!d || typeof d.answer !== "string")
+        throw new Error("Resposta vazia do servidor.");
       setMessages((m) => [...m, { role: "assistant", content: d.answer, sources: d.sources }]);
     } catch (e) {
       setErr(String(e instanceof Error ? e.message : e));

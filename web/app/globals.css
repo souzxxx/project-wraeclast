@@ -18,7 +18,7 @@
   /* ink */
   --text: #e9dcbe;
   --muted: #9c8b6a;
-  --faint: #6f6149;
+  --faint: #8a7a5c; /* ≥4.5:1 on the dark surfaces — used for small informative labels */
 
   /* molten gold accent */
   --gold: #c9a227;
@@ -56,6 +56,7 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh; /* avoids the mobile address-bar scroll/jump that 100vh causes */
   background:
     radial-gradient(900px 520px at 50% -8%, rgba(201, 162, 39, 0.10), transparent 60%),
     radial-gradient(1200px 700px at 85% 0%, rgba(120, 50, 20, 0.10), transparent 55%),
@@ -339,7 +340,7 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 .guide-body li { margin: 0.35rem 0; }
 .guide-body .faq .q { font-weight: 600; margin: 0.6rem 0 0.1rem; color: var(--text); }
 .guide-body .faq .a { color: var(--muted); margin: 0; }
-.chev { color: var(--gold-dim); font-size: 0.7rem; }
+.chev { color: var(--muted); font-size: 0.7rem; }
 
 /* ── price sparklines (Hoje) ── */
 .spark-row {
@@ -374,7 +375,7 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 250px;
+  width: min(250px, calc(100% - 24px)); /* never overflow the graph box on narrow phones */
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -439,17 +440,20 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 .affix-empty { color: var(--faint); font-style: italic; font-size: 0.92rem; }
 .affix-caps { margin-top: auto; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; padding-top: 0.6rem; }
 
-@keyframes slam {
-  0% { transform: scale(1); }
-  35% { transform: scale(0.975); }
-  100% { transform: scale(1); }
-}
 @keyframes flash {
-  0% { box-shadow: 0 0 0 0 rgba(240, 207, 99, 0); }
-  30% { box-shadow: 0 0 40px 4px rgba(240, 207, 99, 0.35); }
-  100% { box-shadow: 0 0 0 0 rgba(240, 207, 99, 0); }
+  0% { box-shadow: inset 0 0 0 0 rgba(240, 207, 99, 0); opacity: 0; }
+  30% { box-shadow: inset 0 0 50px 2px rgba(240, 207, 99, 0.4); opacity: 1; }
+  100% { box-shadow: inset 0 0 0 0 rgba(240, 207, 99, 0); opacity: 0; }
 }
-.altar.slam { animation: slam 0.32s ease, flash 0.5s ease; }
+/* a thin keyed overlay flashes on each orb — the altar itself never remounts, so only the
+   newly-added affix row animates in (not the whole item). */
+.altar-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  pointer-events: none;
+  animation: flash 0.5s ease;
+}
 
 /* orb palette */
 .bench-side { display: flex; flex-direction: column; gap: 1.2rem; }
@@ -504,8 +508,8 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 
 .bench-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 .bench-log { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); min-height: 1.2rem; }
-.bench-log .ok { color: var(--up); }
-.bench-log .no { color: var(--down); }
+.bench-log.ok { color: var(--up); }
+.bench-log.no { color: var(--down); }
 
 .base-picker { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.3rem; }
 .base-chip {

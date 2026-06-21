@@ -86,12 +86,18 @@ function openSides(item: Item): AffixKind[] {
   return sides;
 }
 
-function eligibleDefs(base: Base, item: Item, sides: AffixKind[]): ModDef[] {
+function eligibleDefs(
+  base: Base,
+  item: Item,
+  sides: AffixKind[],
+  exclude?: Set<string>,
+): ModDef[] {
   const present = new Set(item.mods.map((m) => m.group));
   return base.mods.filter(
     (d) =>
       sides.includes(d.affix) &&
       !present.has(d.group) &&
+      !exclude?.has(d.group) &&
       d.tiers.some((t) => t.ilvl <= item.itemLevel),
   );
 }
@@ -122,10 +128,16 @@ function rollTier(def: ModDef, tierIndex: number, rng: Rng): Mod {
 }
 
 /** Roll a fresh modifier for an open side, or null when nothing is eligible. */
-function addRandomMod(base: Base, item: Item, rng: Rng, forceSides?: AffixKind[]): Mod | null {
+function addRandomMod(
+  base: Base,
+  item: Item,
+  rng: Rng,
+  forceSides?: AffixKind[],
+  exclude?: Set<string>,
+): Mod | null {
   const sides = forceSides ?? openSides(item);
   if (sides.length === 0) return null;
-  const defs = eligibleDefs(base, item, sides);
+  const defs = eligibleDefs(base, item, sides, exclude);
   if (defs.length === 0) return null;
   const def = pick(defs, rng);
   return rollTier(def, bestTierIndex(def, item.itemLevel), rng);
@@ -149,11 +161,11 @@ export function canApply(base: Base, item: Item, orb: OrbId): boolean {
     case "essence":
       return item.rarity === "normal";
     case "augment":
-      return item.rarity === "magic" && openSides(item).length > 0;
+      return item.rarity === "magic" && eligibleDefs(base, item, openSides(item)).length > 0;
     case "regal":
       return item.rarity === "magic";
     case "exalt":
-      return item.rarity === "rare" && openSides(item).length > 0;
+      return item.rarity === "rare" && eligibleDefs(base, item, openSides(item)).length > 0;
     case "annul":
     case "divine":
       return item.mods.length > 0;
@@ -211,8 +223,10 @@ export function applyOrb(base: Base, item: Item, orb: OrbId, rng: Rng): ApplyRes
       if (item.rarity === "normal" || item.mods.length === 0)
         return fail("Chaos needs a Magic or Rare item with modifiers.");
       const idx = Math.floor(rng() * item.mods.length);
+      const removed = item.mods[idx];
       const trimmed: Item = { ...item, mods: item.mods.filter((_, i) => i !== idx) };
-      const m = addRandomMod(base, trimmed, rng);
+      // exclude the removed mod's group so Chaos always adds a DIFFERENT modifier (PoE2 rule)
+      const m = addRandomMod(base, trimmed, rng, undefined, new Set([removed.group]));
       return ok(
         m ? { ...trimmed, mods: [...trimmed.mods, m] } : trimmed,
         m ? `Chaos: swapped a modifier → ${m.text}` : "Chaos: removed a modifier.",
@@ -238,6 +252,8 @@ export function applyOrb(base: Base, item: Item, orb: OrbId, rng: Rng): ApplyRes
       return ok(next, `Essence → Rare, guaranteed: ${next.mods[0]?.text ?? "—"}`);
     }
     case "vaal": {
+      // Corruption never rolls a white base into a rare — a Normal item is left untouched.
+      if (item.rarity === "normal") return ok(item, "Vaal Orb: nothing happened.");
       const r = rng();
       if (r < 0.25) return ok(item, "Vaal Orb: nothing happened.");
       if (r < 0.5 && item.mods.length > 0) {
@@ -247,14 +263,15 @@ export function applyOrb(base: Base, item: Item, orb: OrbId, rng: Rng): ApplyRes
           "Corrupted: a modifier was lost.",
         );
       }
-      if (r < 0.75 && item.rarity !== "normal") {
+      if (r < 0.75) {
         const m = addRandomMod(base, item, rng);
         if (m) return ok({ ...item, mods: [...item.mods, m] }, `Corrupted: ${m.text} emerged.`);
         return ok(item, "Vaal Orb: nothing happened.");
       }
-      const target = 3 + Math.floor(rng() * 4); // 3..6
-      const rerolled = fillTo(base, { ...item, rarity: "rare", mods: [] }, target, rng);
-      return ok(rerolled, "Corrupted into a new Rare.");
+      // reroll the modifiers but keep the item's current rarity (magic stays magic, rare rare)
+      const target = item.rarity === "rare" ? 3 + Math.floor(rng() * 4) : 1 + Math.floor(rng() * 2);
+      const rerolled = fillTo(base, { ...item, mods: [] }, target, rng);
+      return ok(rerolled, "Corrupted: rerolled its modifiers.");
     }
   }
 }
