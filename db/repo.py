@@ -10,7 +10,7 @@ import json
 from typing import Any
 
 from db.connection import execute, fetch_all, get_connection
-from db.models import FarmStrategy, KnowledgeChunk, MySnapshot, PriceSnapshot
+from db.models import CraftMethod, FarmStrategy, KnowledgeChunk, MySnapshot, PriceSnapshot
 
 
 def _vec_literal(embedding: list[float]) -> str:
@@ -140,6 +140,41 @@ def replace_farm_guides(league: str, guides: list[dict[str, Any]]) -> int:
             )
         conn.commit()
     return len(guides)
+
+
+def replace_craft_methods(league: str, methods: list[CraftMethod]) -> int:
+    """Replace this league's craft methods with a fresh batch (curated/seeded, not appended) —
+    idempotent daily re-seed, mirroring replace_farm_guides."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM craft_method WHERE league = %s", (league,))
+            cur.executemany(
+                """INSERT INTO craft_method
+                   (league, name, item_base, archetype, target_mods, steps, inputs,
+                    success_prob, output, sources, notes)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                [
+                    (
+                        m.league, m.name, m.item_base, m.archetype,
+                        json.dumps(m.target_mods), json.dumps(m.steps), json.dumps(m.inputs),
+                        m.success_prob, m.output, json.dumps(m.sources), m.notes,
+                    )
+                    for m in methods
+                ],
+            )
+        conn.commit()
+    return len(methods)
+
+
+def latest_craft_methods(league: str) -> list[dict[str, Any]]:
+    """This league's structured craft methods (newest batch), for the EV engine + Craft tab."""
+    return fetch_all(
+        """SELECT name, item_base, archetype, target_mods, steps, inputs, success_prob,
+                  output, sources, notes, captured_at
+           FROM craft_method WHERE league = %s
+           ORDER BY captured_at DESC, name""",
+        (league,),
+    )
 
 
 def latest_knowledge_chunks(limit: int = 80) -> list[dict[str, Any]]:

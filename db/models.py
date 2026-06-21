@@ -54,3 +54,23 @@ class KnowledgeChunk(BaseModel):
     content: str
     embedding: list[float] | None = None
     topic: str | None = None  # craft | farm — coarse lane for RAG/chat filtering
+
+
+class CraftMethod(BaseModel):
+    """A structured crafting method (the craft analogue of FarmStrategy). This is the recipe as
+    DATA, not prose: ordered steps, the aggregate currency `inputs` ({name: expected_qty}) that
+    the EV engine (Craft 3) crosses with live `price_snapshot`, the target mods, and a one-attempt
+    `success_prob`. Output VALUE/ROI is deliberately out of scope here — that is Craft 3."""
+
+    captured_at: datetime | None = None
+    league: str
+    name: str
+    item_base: str
+    archetype: str | None = None  # caster | attack | defence | … — coarse grouping
+    target_mods: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)  # ordered, human-readable
+    inputs: dict[str, float] = Field(default_factory=dict)  # {currency_name: expected_qty}
+    success_prob: float | None = Field(default=None, ge=0, le=1)  # one-attempt chance, 0..1
+    output: str = ""  # what it produces, e.g. "+3 Spell Skills caster wand"
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+    notes: str = ""
