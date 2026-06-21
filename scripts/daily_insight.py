@@ -13,12 +13,19 @@ CLI:  python -m scripts.daily_insight
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from api.craft_alerts import (
+    CraftAlert,
+    as_date,
+    craft_alert_lines,
+    craft_alerts,
+    split_two_days,
+)
 from collector.config import get_settings
 
 # Thresholds. A move must clear BOTH the relative and absolute bars to count as "notable"
@@ -60,6 +67,7 @@ class DailyInsight(BaseModel):
     farm_moves: list[FarmMove] = Field(default_factory=list)
     price_moves: list[PriceMove] = Field(default_factory=list)
     new_sources: list[NewSource] = Field(default_factory=list)
+    craft_alerts: list[CraftAlert] = Field(default_factory=list)
     anomalies: list[str] = Field(default_factory=list)
 
     @property
@@ -70,39 +78,11 @@ class DailyInsight(BaseModel):
             or self.farm_moves
             or self.price_moves
             or self.new_sources
+            or self.craft_alerts
         )
 
 
 # ── helpers (pure) ──────────────────────────────────────────────────────────────────
-
-def _to_date(value: Any) -> date | None:
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value).date()
-        except ValueError:
-            return None
-    return None
-
-
-def _split_two_latest_days(
-    rows: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Bucket rows by their captured_at date; return (latest day, previous day)."""
-    by_date: dict[date, list[dict[str, Any]]] = {}
-    for r in rows:
-        d = _to_date(r.get("captured_at"))
-        if d is None:
-            continue
-        by_date.setdefault(d, []).append(r)
-    days = sorted(by_date, reverse=True)
-    latest = by_date[days[0]] if days else []
-    previous = by_date[days[1]] if len(days) > 1 else []
-    return latest, previous
-
 
 def _dedupe_latest(
     rows: list[dict[str, Any]], key: tuple[str, ...]
@@ -112,8 +92,8 @@ def _dedupe_latest(
     for r in rows:
         k = tuple(r.get(field) for field in key)
         prev = out.get(k)
-        if prev is None or (_to_date(r.get("captured_at")) or date.min) >= (
-            _to_date(prev.get("captured_at")) or date.min
+        if prev is None or (as_date(r.get("captured_at")) or date.min) >= (
+            as_date(prev.get("captured_at")) or date.min
         ):
             out[k] = r
     return out
@@ -214,7 +194,7 @@ def notable_price_moves(
 
 
 def _new_sources(knowledge_rows: list[dict[str, Any]]) -> list[NewSource]:
-    latest, _ = _split_two_latest_days(knowledge_rows)
+    latest, _ = split_two_days(knowledge_rows)
     seen: set[str] = set()
     out: list[NewSource] = []
     for r in latest:
@@ -231,16 +211,18 @@ def compute_insight(
     farm_rows: list[dict[str, Any]],
     price_rows: list[dict[str, Any]],
     knowledge_rows: list[dict[str, Any]],
+    craft_method_rows: list[dict[str, Any]] | None = None,
     today: date | None = None,
 ) -> DailyInsight:
     """Pure core: turn recent (multi-day) rows into a structured daily diff with anomalies."""
     today = today or date.today()
-    latest_farms, prev_farms = _split_two_latest_days(farm_rows)
-    latest_prices, prev_prices = _split_two_latest_days(price_rows)
+    latest_farms, prev_farms = split_two_days(farm_rows)
+    latest_prices, prev_prices = split_two_days(price_rows)
 
     entered, left, moves, current_top = farm_ranking_changes(latest_farms, prev_farms)
     price_moves = notable_price_moves(latest_prices, prev_prices)
     new_sources = _new_sources(knowledge_rows)
+    alerts = craft_alerts(craft_method_rows or [], latest_prices, prev_prices)
     has_baseline = bool(prev_farms or prev_prices)
 
     anomalies: list[str] = []
@@ -255,6 +237,9 @@ def compute_insight(
                 f"{m.name} {direction} {m.pct:+.0f}% "
                 f"({m.from_chaos} → {m.to_chaos} chaos)"
             )
+    for a in alerts:
+        if a.kind == "into_profit":
+            anomalies.append(f"Craft crossed into profit: {a.name} (ROI now {a.to_roi}%)")
 
     return DailyInsight(
         league=league,
@@ -266,6 +251,7 @@ def compute_insight(
         farm_moves=moves,
         price_moves=price_moves,
         new_sources=new_sources,
+        craft_alerts=alerts,
         anomalies=anomalies,
     )
 
@@ -321,6 +307,12 @@ def render_insight(insight: DailyInsight) -> str:
     else:
         lines.append("_No moves past the threshold._")
 
+    lines += ["", "## Craft alerts", ""]
+    if insight.craft_alerts:
+        lines += craft_alert_lines(insight.craft_alerts)
+    else:
+        lines.append("_No craft crossed the profit line today._")
+
     lines += ["", "## New community sources today", ""]
     if insight.new_sources:
         for s in insight.new_sources:
@@ -336,6 +328,7 @@ def run() -> str:
     from db.repo import (
         farm_strategies_since,
         knowledge_chunks_since,
+        latest_craft_methods,
         price_snapshots_since,
     )
 
@@ -346,6 +339,7 @@ def run() -> str:
         farm_rows=farm_strategies_since(league, days=3),
         price_rows=price_snapshots_since(league, days=3),
         knowledge_rows=knowledge_chunks_since(days=2),
+        craft_method_rows=latest_craft_methods(league),
     )
     out_dir = Path(settings.obsidian_vault_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

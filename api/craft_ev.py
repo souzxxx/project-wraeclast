@@ -85,6 +85,7 @@ def method_ev(
             else None,
             "profit_div": round(profit_div, 2) if profit_div is not None else None,
             "roi_pct": round(roi_pct) if roi_pct is not None else None,
+            "roi_pct_exact": roi_pct,  # unrounded — for threshold/crossing comparisons
             "missing_prices": missing,
             "priced": priced,
         }
