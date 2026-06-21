@@ -150,6 +150,16 @@ def latest_knowledge_chunks(limit: int = 80) -> list[dict[str, Any]]:
     )
 
 
+def latest_craft_knowledge(limit: int = 30) -> list[dict[str, Any]]:
+    """Newest craft-lane knowledge chunks (topic='craft') for the Craft tab guides."""
+    return fetch_all(
+        """SELECT source_url, title, content, captured_at FROM knowledge_chunk
+           WHERE topic = 'craft'
+           ORDER BY captured_at DESC LIMIT %s""",
+        (limit,),
+    )
+
+
 def latest_farm_guides(league: str) -> list[dict[str, Any]]:
     return fetch_all(
         """SELECT name, profit_per_hour, risk, target_currency, overview, steps, items, atlas,

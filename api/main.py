@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import build, chat, farm, graph, ingest, price
+from api.routes import build, chat, craft, farm, graph, ingest, price
 from collector.config import get_settings
 
 app = FastAPI(title="Project Wraeclast API", version="0.1.0")
@@ -27,6 +27,7 @@ app.add_middleware(
 app.include_router(farm.router)
 app.include_router(build.router)
 app.include_router(chat.router)
+app.include_router(craft.router)
 app.include_router(ingest.router)
 app.include_router(graph.router)
 app.include_router(price.router)
@@ -39,7 +40,8 @@ def index() -> dict[str, Any]:
         "service": "Project Wraeclast API",
         "league": get_settings().poe2_league,
         "endpoints": [
-            "/health", "/state", "/farm", "/build", "/price-history", "/chat (POST)", "/docs",
+            "/health", "/state", "/farm", "/build", "/prices", "/price-history",
+            "/craft/knowledge", "/chat (POST)", "/docs",
         ],
     }
 
@@ -62,3 +64,13 @@ def league_state() -> dict[str, Any]:
         "top_farms": latest_farm_strategies(league, limit=10),
         "my_snapshot": latest_my_snapshot(),
     }
+
+
+@app.get("/prices")
+def prices() -> dict[str, Any]:
+    """Live currency prices for the crafting bench's cost ledger (read-only)."""
+    from api.prices import currency_prices
+    from db.repo import latest_prices
+
+    league = get_settings().poe2_league
+    return {"league": league, "prices": currency_prices(latest_prices(league, limit=1000))}
