@@ -41,12 +41,37 @@ def test_deterministic_method_has_one_attempt():
     assert ev["expected_cost_div"] == ev["base_cost_div"]
 
 
-def test_missing_prices_are_flagged_and_not_counted():
-    m = {"inputs": {"Exalted Orb": 2, "Omen of Whittling": 1}, "success_prob": 1.0}
+def test_missing_prices_withhold_derived_money():
+    # an under-counted cost must NOT publish a (misleading, inflated) ROI/profit
+    m = {"inputs": {"Exalted Orb": 2, "Omen of Whittling": 1}, "success_prob": 1.0,
+         "output_value_div": 10}
     ev = method_ev(m, _idx(), 200.0)
     assert ev["missing_prices"] == ["Omen of Whittling"]
-    assert ev["priced"] is False  # an input couldn't be valued
-    assert ev["base_cost_div"] == round(10 / 200, 2)  # only the priced Exalts counted
+    assert ev["priced"] is False
+    assert ev["base_cost_div"] is None and ev["expected_cost_div"] is None
+    assert ev["profit_div"] is None and ev["roi_pct"] is None
+
+
+def test_zero_success_prob_is_unpriceable_not_one_attempt():
+    m = {"inputs": {"Exalted Orb": 1}, "success_prob": 0, "output_value_div": 10}
+    ev = method_ev(m, _idx(), 200.0)
+    assert ev["priced"] is False  # 0% never succeeds — don't cost it as a guaranteed attempt
+    assert ev["roi_pct"] is None and ev["profit_div"] is None
+
+
+def test_real_poe2_feed_is_divine_denominated():
+    # The live PoE2 ninja feed sets divine_value and leaves chaos_value None (test_ninja_client).
+    prices = [
+        {"name": "Exalted Orb", "chaos_value": None, "divine_value": 0.02},
+        {"name": "Divine Orb", "chaos_value": None, "divine_value": 1.0},
+    ]
+    idx = price_index(prices)
+    assert idx["Exalted Orb"] == 0.02 and idx["Divine Orb"] == 1.0
+    m = {"inputs": {"Exalted Orb": 5}, "success_prob": 1.0, "output_value_div": 2}
+    ev = method_ev(m, idx, idx.get("Divine Orb"))
+    assert ev["priced"] is True
+    assert ev["expected_cost_div"] == 0.1  # 5 × 0.02 div
+    assert ev["roi_pct"] == 1900  # (2 - 0.1) / 0.1 × 100
 
 
 def test_handles_decimal_inputs_like_postgres_numeric():

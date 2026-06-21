@@ -38,14 +38,16 @@ def seed_methods(league: str) -> list[CraftMethod]:
             ],
             steps=[
                 "Buy an ilvl 82+ caster wand base (e.g. Siphoning Wand).",
-                "Use a Greater Essence to make it Rare and guarantee the +Spell Skills prefix.",
+                "Orb of Transmutation to make it Magic, then a Greater Essence to upgrade "
+                "Magic → Rare and guarantee the +Spell Skills prefix.",
                 "With Omen of Sinistral Exaltation active, slam Exalted Orbs to add the remaining "
                 "prefixes (spell damage, flat spell) without touching suffixes.",
                 "Fill suffixes (cast speed, crit) with plain Exalted Orbs.",
                 "Divine to push the +Spell Skills and the key numeric rolls.",
             ],
             inputs={
-                "Greater Essence of Haste": 3,
+                "Orb of Transmutation": 1,
+                "Greater Essence of Haste": 1,
                 "Omen of Sinistral Exaltation": 2,
                 "Exalted Orb": 6,
                 "Divine Orb": 2,
@@ -76,13 +78,15 @@ def seed_methods(league: str) -> list[CraftMethod]:
             ],
             steps=[
                 "Buy an ilvl 82+ quarterstaff base.",
-                "Greater Essence to guarantee the % Physical Damage prefix and make it Rare.",
+                "Orb of Transmutation to Magic, then a Greater Essence to go Magic → Rare with "
+                "the guaranteed % Physical Damage prefix.",
                 "Slam Exalted Orbs for flat phys (prefix) and attack speed / crit (suffixes).",
                 "Annul + re-Exalt or use Dextral omens if a bad suffix lands.",
                 "Divine to maximise the phys rolls.",
             ],
             inputs={
-                "Greater Essence of Battle": 3,
+                "Orb of Transmutation": 1,
+                "Greater Essence of Battle": 1,
                 "Exalted Orb": 6,
                 "Orb of Annulment": 1,
                 "Divine Orb": 2,
@@ -148,14 +152,16 @@ def seed_methods(league: str) -> list[CraftMethod]:
             ],
             steps=[
                 "Buy an ilvl 82+ pure-ES helmet base.",
-                "Greater Essence of the Body to make it Rare with guaranteed flat ES.",
+                "Orb of Transmutation to Magic, then Greater Essence of the Body to go "
+                "Magic → Rare with guaranteed flat ES.",
                 "Exalted Orbs to add % increased ES (prefix) and resistances / Intelligence "
                 "(suffixes).",
                 "Omen of Sinistral Annulment to strip a bad prefix safely if % ES collides.",
                 "Divine to maximise the ES rolls.",
             ],
             inputs={
-                "Greater Essence of the Body": 3,
+                "Orb of Transmutation": 1,
+                "Greater Essence of the Body": 1,
                 "Exalted Orb": 5,
                 "Omen of Sinistral Annulment": 1,
                 "Divine Orb": 1,
@@ -185,12 +191,14 @@ def seed_methods(league: str) -> list[CraftMethod]:
             ],
             steps=[
                 "Buy an ilvl 81+ Stellar Amulet.",
-                "Greater Essence to guarantee Spirit and make it Rare.",
+                "Orb of Transmutation to Magic, then a Greater Essence to go Magic → Rare with "
+                "guaranteed Spirit.",
                 "Exalted Orbs for spell damage (prefix) and crit damage bonus (suffix).",
                 "Divine to perfect Spirit and the damage rolls.",
             ],
             inputs={
-                "Greater Essence of the Mind": 3,
+                "Orb of Transmutation": 1,
+                "Greater Essence of the Mind": 1,
                 "Exalted Orb": 5,
                 "Divine Orb": 1,
             },
@@ -249,7 +257,7 @@ def seed_methods(league: str) -> list[CraftMethod]:
             name="Abyssal Jewel craft (life + damage)",
             item_base="Abyssal Jewel (ilvl 80+)",
             archetype="jewel",
-            mechanics=["abyss", "essence", "currency"],
+            mechanics=["abyss", "currency"],
             target_mods=[
                 "+# to maximum Life",
                 "Adds # to # Physical/Elemental Damage to Attacks",
@@ -257,13 +265,15 @@ def seed_methods(league: str) -> list[CraftMethod]:
             ],
             steps=[
                 "Get an Abyssal Jewel from Abyss content (for an Abyssal Socket).",
-                "Essence to guarantee Life and make it Rare.",
+                "Jewels can't take essences — use Transmutation → Regal to make it Rare, or a "
+                "Liquid Emotion (the jewel analogue of essences) to add a guaranteed mod.",
                 "Exalted Orbs for the damage and speed suffixes.",
                 "Divine to push the life/damage rolls; Abyssal jewels with life + double damage "
                 "sell very well.",
             ],
             inputs={
-                "Greater Essence of the Body": 2,
+                "Orb of Transmutation": 1,
+                "Regal Orb": 1,
                 "Exalted Orb": 4,
                 "Divine Orb": 1,
             },
@@ -277,7 +287,8 @@ def seed_methods(league: str) -> list[CraftMethod]:
                 }
             ],
             notes="Abyss is its own craft lane: abyssal jewels socket into Abyssal Sockets and "
-            "follow jewel mod rules. Life + two damage mods is the premium combo.",
+            "follow jewel mod rules — regular essences don't apply to jewels (that's Liquid "
+            "Emotions). Life + two damage mods is the premium combo.",
         ),
         CraftMethod(
             league=league,
@@ -296,7 +307,7 @@ def seed_methods(league: str) -> list[CraftMethod]:
                 "otherwise-finished item.",
             ],
             inputs={
-                "Greater Rune of the Body": 2,
+                "Greater Body Rune": 2,
             },
             success_prob=1.0,
             output="resistance/attribute-patched gear (deterministic)",
@@ -321,8 +332,9 @@ def seed_methods(league: str) -> list[CraftMethod]:
             ],
             steps=[
                 "Take a finished rare ring/amulet.",
-                "Apply matching Catalysts (e.g. resistance catalysts) to add quality that boosts "
-                "that modifier type's values by up to 20%.",
+                "Apply the Catalyst that matches the modifier type you want to boost (e.g. an "
+                "elemental catalyst for a resistance) — it adds quality that raises that mod "
+                "type's values, up to the 20% cap.",
                 "Cheap, deterministic value bump on an already-good item before selling.",
             ],
             inputs={

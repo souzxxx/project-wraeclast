@@ -90,11 +90,15 @@ def build_context_block(ctx: RagContext) -> str:
         )
         for m in ctx.craft_methods:
             mech = ", ".join(m.get("mechanics") or []) or "craft"
-            cost, roi = m.get("expected_cost_div"), m.get("roi_pct")
-            parts.append(
-                f"- {m.get('name')} [{mech}] → makes {m.get('output')}: ~{cost} div expected "
-                f"cost, ROI ~{roi}% (success {m.get('success_prob')})"
-            )
+            head = f"- {m.get('name')} [{mech}] → makes {m.get('output')}:"
+            if m.get("priced") and m.get("roi_pct") is not None:
+                parts.append(
+                    f"{head} ~{m.get('expected_cost_div')} div expected cost, "
+                    f"ROI ~{m.get('roi_pct')}% (success {m.get('success_prob')})"
+                )
+            else:
+                miss = ", ".join(m.get("missing_prices") or []) or "n/a"
+                parts.append(f"{head} cost not yet priceable (unpriced inputs: {miss})")
     if ctx.chunks:
         parts.append("COMMUNITY KNOWLEDGE (qualitative):")
         parts += [f"- [{c.get('title')}] {(c.get('content') or '')[:500]}" for c in ctx.chunks]

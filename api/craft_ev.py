@@ -27,49 +27,53 @@ def _f(value: Any) -> float | None:
 
 
 def price_index(prices: list[dict[str, Any]]) -> dict[str, float]:
-    """Map consumable name -> chaos value (any priced item; inputs aren't only currency)."""
+    """Map consumable name -> unit value in the feed's own denomination. PoE2's poe.ninja feed is
+    DIVINE-denominated (it leaves `chaos_value` null and fills `divine_value`), so fall back to
+    `divine_value`; PoE1-style chaos data still works. Within a single feed the unit is consistent,
+    and `Divine Orb` resolves to that unit's value (1.0 for the divine feed)."""
     index: dict[str, float] = {}
     for p in prices:
         name = p.get("name")
-        chaos = _f(p.get("chaos_value"))
-        if name and chaos is not None:
-            index[name] = chaos
+        value = _f(p.get("chaos_value"))
+        if value is None:
+            value = _f(p.get("divine_value"))
+        if name and value is not None:
+            index[name] = value
     return index
 
 
 def method_ev(
-    method: dict[str, Any], index: dict[str, float], divine_chaos: float | None
+    method: dict[str, Any], index: dict[str, float], divine_unit: float | None
 ) -> dict[str, Any]:
-    """Compute the EV of one method against a price index. Pure."""
+    """Compute the EV of one method against a price index. Pure.
+
+    We only publish derived money fields (cost/profit/ROI) when the method is fully `priced` —
+    every input valued, a real cost, and a usable success chance. Otherwise the cost would be an
+    UNDER-count (missing inputs sum to 0) and ROI would be inflated, so those fields are None and
+    consumers fall back to `missing_prices`."""
     inputs = method.get("inputs") or {}
     missing = sorted(name for name in inputs if name not in index)
-    base_cost_chaos = sum(
-        float(qty) * index[name] for name, qty in inputs.items() if name in index
-    )
+    base_cost = sum(float(qty) * index[name] for name, qty in inputs.items() if name in index)
 
     sp = _f(method.get("success_prob"))
+    invalid_sp = sp is not None and sp <= 0  # 0% (or negative) = never succeeds, not 1 attempt
     expected_attempts = (1.0 / sp) if sp and sp > 0 else 1.0
-    expected_cost_chaos = base_cost_chaos * expected_attempts
 
-    def to_div(chaos: float) -> float | None:
-        return chaos / divine_chaos if divine_chaos and divine_chaos > 0 else None
+    # trust the EV only when every input is valued, it costs something, and success is usable
+    priced = bool(not missing and base_cost > 0 and not invalid_sp)
 
-    base_cost_div = to_div(base_cost_chaos)
-    expected_cost_div = to_div(expected_cost_chaos)
-    output_value = _f(method.get("output_value_div"))
+    def to_div(value: float) -> float | None:
+        return value / divine_unit if divine_unit and divine_unit > 0 else None
 
-    profit_div = (
-        output_value - expected_cost_div
-        if output_value is not None and expected_cost_div is not None
-        else None
-    )
-    roi_pct = (
-        profit_div / expected_cost_div * 100
-        if profit_div is not None and expected_cost_div and expected_cost_div > 0
-        else None
-    )
-    # "priced" == we could value every input and the recipe actually costs something
-    priced = not missing and base_cost_chaos > 0
+    base_cost_div = expected_cost_div = profit_div = roi_pct = None
+    if priced:
+        base_cost_div = to_div(base_cost)
+        expected_cost_div = to_div(base_cost * expected_attempts)
+        output_value = _f(method.get("output_value_div"))
+        if output_value is not None and expected_cost_div is not None:
+            profit_div = output_value - expected_cost_div
+            if expected_cost_div > 0:
+                roi_pct = profit_div / expected_cost_div * 100
 
     result = {k: method.get(k) for k in _PASSTHROUGH}
     result.update(
@@ -93,8 +97,8 @@ def rank_methods(
 ) -> list[dict[str, Any]]:
     """Rank methods by ROI: fully-priced + highest ROI first, unpriceable ones last."""
     index = price_index(prices)
-    divine_chaos = index.get("Divine Orb")
-    evs = [method_ev(m, index, divine_chaos) for m in methods]
+    divine_unit = index.get("Divine Orb")
+    evs = [method_ev(m, index, divine_unit) for m in methods]
     return sorted(
         evs,
         key=lambda e: (
