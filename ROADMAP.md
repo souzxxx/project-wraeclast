@@ -34,9 +34,9 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [x] **Craft 2 — `craft_method` model**: structured methods (item base, ordered steps, inputs
       `{currency: qty}`, target mods, success probability). Pydantic schema + `db/migrations` + tests.
       _(see Done)_
-- [ ] **Craft 3 — calculated EV** (the differentiator): pure core crossing `craft_method` inputs
+- [x] **Craft 3 — calculated EV** (the differentiator): pure core crossing `craft_method` inputs
       with `price_snapshot` → expected cost (incl. retries) vs output value → ROI ranked per method.
-      Unit-tested offline, same as farm profit/hour.
+      Unit-tested offline, same as farm profit/hour. _(see Done)_
 - [ ] **Craft 4 — `craft_guide` (PT-BR)**: GLM generates per-archetype/budget guides, mirroring
       `guides.py` / `farm_guide`; refreshed daily in `run_daily`. This is the "huge craft guide".
 - [ ] **Craft 5 — site + chat surface**: a "Craft" tab with EV-ranked methods + the guides.
@@ -60,6 +60,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-21** — Craft 3: calculated EV. Pure `api/craft_ev` crosses each method's `inputs`
+  with live `price_snapshot` → expected cost (incl. retries via `success_prob`) → ROI vs the
+  curated `output_value_div`, ranked (fully-priced first, `missing_prices` flagged). Model gains
+  `mechanics` + `output_value_div` (migration `0006`); seed enriched to span currency, essence,
+  **omen, abyss, rune, catalyst**; `GET /craft/ev`; top methods fed into chat RAG context. +9 tests.
 - **2026-06-21** — Craft 2 (#6): structured `craft_method` model (item_base, target_mods, ordered
   steps, `inputs` {currency: qty}, validated `success_prob`) + migration `0005` + repo
   `replace_craft_methods`/`latest_craft_methods` + curated seed of 5 source-attributed PoE2 0.5

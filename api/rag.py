@@ -33,6 +33,7 @@ class RagContext:
     farms: list[dict[str, Any]]
     my_snapshot: dict[str, Any] | None
     prices: list[dict[str, Any]]
+    craft_methods: list[dict[str, Any]]
 
 
 def _price_value(p: dict[str, Any]) -> float | None:
@@ -40,7 +41,9 @@ def _price_value(p: dict[str, Any]) -> float | None:
 
 
 def retrieve(question: str, k: int = 6) -> RagContext:
+    from api.craft_ev import rank_methods
     from db.repo import (
+        latest_craft_methods,
         latest_farm_strategies,
         latest_my_snapshot,
         latest_prices,
@@ -59,6 +62,7 @@ def retrieve(question: str, k: int = 6) -> RagContext:
         farms=latest_farm_strategies(league, limit=5),
         my_snapshot=latest_my_snapshot(),
         prices=prices[:25],
+        craft_methods=rank_methods(latest_craft_methods(league), prices)[:5],
     )
 
 
@@ -79,6 +83,18 @@ def build_context_block(ctx: RagContext) -> str:
             f"OWNER CHARACTER: {s.get('character_name')} — "
             f"{s.get('char_class')} lvl {s.get('level')}"
         )
+    if ctx.craft_methods:
+        parts.append(
+            "TOP CRAFT METHODS (EV-ranked; input cost is live, output value/success estimated). "
+            "Craft spans currency, essences, omens, abyss, runes, catalysts — not just orbs:"
+        )
+        for m in ctx.craft_methods:
+            mech = ", ".join(m.get("mechanics") or []) or "craft"
+            cost, roi = m.get("expected_cost_div"), m.get("roi_pct")
+            parts.append(
+                f"- {m.get('name')} [{mech}] → makes {m.get('output')}: ~{cost} div expected "
+                f"cost, ROI ~{roi}% (success {m.get('success_prob')})"
+            )
     if ctx.chunks:
         parts.append("COMMUNITY KNOWLEDGE (qualitative):")
         parts += [f"- [{c.get('title')}] {(c.get('content') or '')[:500]}" for c in ctx.chunks]

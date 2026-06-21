@@ -25,6 +25,19 @@ def test_each_method_is_well_formed():
         assert m.success_prob is not None and 0 < m.success_prob <= 1
 
 
+def test_methods_carry_mechanics_and_output_value():
+    for m in _METHODS:
+        assert m.mechanics, f"{m.name} has no craft mechanics tagged"
+        assert m.output_value_div is not None and m.output_value_div > 0
+
+
+def test_craft_breadth_is_covered_not_just_currency():
+    # Craft is more than currency: the seed must span the full surface.
+    seen = {mech for m in _METHODS for mech in m.mechanics}
+    for required in ("currency", "essence", "omen", "abyss", "rune", "catalyst"):
+        assert required in seen, f"no seeded method uses the '{required}' craft mechanic"
+
+
 def test_inputs_are_priceable_currency_quantities():
     # inputs drive the EV engine: every key is a non-empty currency name, every qty positive.
     for m in _METHODS:
