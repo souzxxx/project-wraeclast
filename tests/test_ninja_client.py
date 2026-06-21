@@ -1,3 +1,4 @@
+from collector.config import Settings
 from collector.ninja_client import normalize_exchange
 
 SAMPLE = {
@@ -44,3 +45,19 @@ def test_normalize_exchange_chaos_primary():
     rows = normalize_exchange(payload, "L")
     assert rows[0].chaos_value == 5
     assert rows[0].divine_value is None
+
+
+def test_normalize_exchange_tags_custom_item_type():
+    # the same parser serves every craft-surface category — it just gets a different item_type
+    rows = normalize_exchange(SAMPLE, "L", item_type="essence")
+    assert rows and all(r.item_type == "essence" for r in rows)
+
+
+def test_ninja_economy_category_list_parses_pairs():
+    s = Settings(ninja_economy_types="Currency:currency, Essences:essence ,Ritual:ritual,, Bare")
+    assert s.ninja_economy_category_list == [
+        ("Currency", "currency"),
+        ("Essences", "essence"),
+        ("Ritual", "ritual"),
+        ("Bare", "currency"),  # no ':' -> defaults to currency
+    ]

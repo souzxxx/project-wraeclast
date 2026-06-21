@@ -338,7 +338,7 @@ def seed_methods(league: str) -> list[CraftMethod]:
                 "Cheap, deterministic value bump on an already-good item before selling.",
             ],
             inputs={
-                "Catalyst": 10,
+                "Xoph's Catalyst": 10,
             },
             success_prob=1.0,
             output="catalyst-quality ring/amulet (boosted stats)",

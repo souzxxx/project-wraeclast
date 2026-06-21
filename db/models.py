@@ -11,7 +11,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-ItemType = Literal["currency", "unique", "base", "gem"]
+# poe.ninja groups the PoE2 economy by mechanic; the craft surface spans several of them.
+ItemType = Literal[
+    "currency", "essence", "rune", "soul_core", "ritual", "delirium",
+    "breach", "abyss", "expedition", "unique", "base", "gem",
+]
 Risk = Literal["low", "med", "high"]
 
 

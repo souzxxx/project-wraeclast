@@ -60,6 +60,12 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-21** — Craft 3.5: price the whole craft surface. `ninja_client.fetch_economy` now
+  pulls every poe.ninja PoE2 category (currency, essences, omens via Ritual, catalysts via Breach,
+  liquid emotions via Delirium, runes, soul cores, abyss, expedition — ~450 priced rows/day,
+  config-driven `ninja_economy_types`, tagged by `item_type`). The EV engine now prices
+  essence/omen/rune/catalyst/abyss inputs by name, so every seed method ranks by real ROI
+  end-to-end (verified against the live feed). Bench/sparklines still filter to currency. +2 tests.
 - **2026-06-21** — Craft 3: calculated EV. Pure `api/craft_ev` crosses each method's `inputs`
   with live `price_snapshot` → expected cost (incl. retries via `success_prob`) → ROI vs the
   curated `output_value_div`, ranked (fully-priced first, `missing_prices` flagged). Model gains
