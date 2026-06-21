@@ -69,8 +69,12 @@ class CraftMethod(BaseModel):
     archetype: str | None = None  # caster | attack | defence | … — coarse grouping
     target_mods: list[str] = Field(default_factory=list)
     steps: list[str] = Field(default_factory=list)  # ordered, human-readable
-    inputs: dict[str, float] = Field(default_factory=dict)  # {currency_name: expected_qty}
+    # craft systems this method uses — craft is NOT just currency: essence, omen, abyss, rune,
+    # catalyst, meta-craft all belong here so EV/chat can reason across the whole craft surface.
+    mechanics: list[str] = Field(default_factory=list)
+    inputs: dict[str, float] = Field(default_factory=dict)  # {consumable_name: expected_qty}
     success_prob: float | None = Field(default=None, ge=0, le=1)  # one-attempt chance, 0..1
     output: str = ""  # what it produces, e.g. "+3 Spell Skills caster wand"
+    output_value_div: float | None = Field(default=None, ge=0)  # curated sale-value estimate (EV)
     sources: list[dict[str, Any]] = Field(default_factory=list)
     notes: str = ""

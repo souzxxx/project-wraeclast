@@ -150,14 +150,15 @@ def replace_craft_methods(league: str, methods: list[CraftMethod]) -> int:
             cur.execute("DELETE FROM craft_method WHERE league = %s", (league,))
             cur.executemany(
                 """INSERT INTO craft_method
-                   (league, name, item_base, archetype, target_mods, steps, inputs,
-                    success_prob, output, sources, notes)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                   (league, name, item_base, archetype, target_mods, steps, mechanics, inputs,
+                    success_prob, output, output_value_div, sources, notes)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 [
                     (
                         m.league, m.name, m.item_base, m.archetype,
-                        json.dumps(m.target_mods), json.dumps(m.steps), json.dumps(m.inputs),
-                        m.success_prob, m.output, json.dumps(m.sources), m.notes,
+                        json.dumps(m.target_mods), json.dumps(m.steps), json.dumps(m.mechanics),
+                        json.dumps(m.inputs), m.success_prob, m.output, m.output_value_div,
+                        json.dumps(m.sources), m.notes,
                     )
                     for m in methods
                 ],
@@ -169,8 +170,8 @@ def replace_craft_methods(league: str, methods: list[CraftMethod]) -> int:
 def latest_craft_methods(league: str) -> list[dict[str, Any]]:
     """This league's structured craft methods (newest batch), for the EV engine + Craft tab."""
     return fetch_all(
-        """SELECT name, item_base, archetype, target_mods, steps, inputs, success_prob,
-                  output, sources, notes, captured_at
+        """SELECT name, item_base, archetype, target_mods, steps, mechanics, inputs, success_prob,
+                  output, output_value_div, sources, notes, captured_at
            FROM craft_method WHERE league = %s
            ORDER BY captured_at DESC, name""",
         (league,),
