@@ -37,8 +37,9 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [x] **Craft 3 — calculated EV** (the differentiator): pure core crossing `craft_method` inputs
       with `price_snapshot` → expected cost (incl. retries) vs output value → ROI ranked per method.
       Unit-tested offline, same as farm profit/hour. _(see Done)_
-- [ ] **Craft 4 — `craft_guide` (PT-BR)**: GLM generates per-archetype/budget guides, mirroring
+- [x] **Craft 4 — `craft_guide` (PT-BR)**: GLM generates per-archetype/budget guides, mirroring
       `guides.py` / `farm_guide`; refreshed daily in `run_daily`. This is the "huge craft guide".
+      _(see Done)_
 - [ ] **Craft 5 — site + chat surface**: a "Craft" tab with EV-ranked methods + the guides.
 - [ ] **Craft 6 — craft alerts**: flag when a craft crosses into profit (input dropped / output
       rose); surface on the site + daily report. _(was the standalone "Craft/price alerts" item)_
@@ -60,6 +61,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-21** — Craft 4: PT-BR craft guides. `collector/craft_guides.py` (GLM) writes
+  execution-ready pt-BR tutorials grounded in the EV-ranked methods + craft knowledge, anchored to
+  the live patch (config `poe2_patch=0.5.3`, env-overridable) so guides never claim a stale
+  version; the NUMBERS (cost/ROI) come from the EV engine, not the LLM. Migration `0007` + repo
+  replace/latest + `GET /craft/guides` + run_daily wiring. +6 offline tests.
 - **2026-06-21** — Craft 3.5: price the whole craft surface. `ninja_client.fetch_economy` now
   pulls every poe.ninja PoE2 category (currency, essences, omens via Ritual, catalysts via Breach,
   liquid emotions via Delirium, runes, soul cores, abyss, expedition — ~450 priced rows/day,
