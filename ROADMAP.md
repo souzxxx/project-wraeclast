@@ -29,10 +29,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 > Same engine as farms, aimed at crafting: rank methods by **calculated EV** — input cost
 > (via `price_snapshot`) × success chance × output value — never prose. Build it bottom-up,
 > one layer per nightly run. Craft YouTube queries are already seeded in `config.py`.
-- [ ] **Craft 1 — knowledge corpus**: _curated seed already done_ — `collector/seed_knowledge.py`
-      ingests 4 source-attributed craft notes (currency/flow, essences, omens, profit) every run,
-      and craft YouTube queries are seeded in `config.py`. **Remaining:** tag/categorise craft
-      `knowledge_chunk`s (e.g. a `topic` field) so RAG/chat can filter craft specifically.
+- [x] **Craft 1 — knowledge corpus**: curated seed + craft `knowledge_chunk` topic tagging,
+      so RAG/chat can filter the craft lane specifically. _(see Done)_
 - [ ] **Craft 2 — `craft_method` model**: structured methods (item base, ordered steps, inputs
       `{currency: qty}`, target mods, success probability). Pydantic schema + `db/migrations` + tests.
 - [ ] **Craft 3 — calculated EV** (the differentiator): pure core crossing `craft_method` inputs
@@ -61,6 +59,13 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-21** — Craft 1: tag `knowledge_chunk`s by `topic` (`craft` | `farm`) so RAG/chat can
+  filter the craft lane. New pure `collector/topics.classify_topic` (offline keyword heuristic —
+  one strong craft term, or two weak ones → `craft`, else `farm`), wired through `KnowledgeDoc`/
+  `ingest_documents` (auto-classify when a producer doesn't set it) and the craft seed (tagged
+  `craft` explicitly). Migration `0004` adds the `topic` column + index; `upsert_knowledge_chunk`
+  persists it; `search_knowledge(..., topic=)` filters; chat narrows to craft only for clearly
+  craft questions via `topic_for_question` (farm/general stay broad). +11 offline tests.
 - **2026-06-20** — Price-history sparklines on the "Hoje" tab. Pure core
   `api/price_history.build_sparklines` buckets `price_snapshot` rows into one point per
   calendar day per currency (latest snapshot each day wins, defensive vs intra-day reruns),

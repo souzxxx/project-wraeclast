@@ -17,15 +17,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from collector.topics import CRAFT
+
 
 @dataclass(frozen=True)
 class SeedDoc:
     """A distilled, source-attributed craft note. `source_url` is the canonical source and the
-    dedup key; `content` is a faithful hand-distilled summary, not a raw page scrape."""
+    dedup key; `content` is a faithful hand-distilled summary, not a raw page scrape. `topic`
+    defaults to craft — this whole corpus is the craft lane."""
 
     source_url: str
     title: str
     content: str
+    topic: str = CRAFT
 
 
 _SEED_DOCS: list[SeedDoc] = [
@@ -144,7 +148,7 @@ def run() -> dict[str, int]:
     from collector.ingest import KnowledgeDoc, ingest_documents
 
     docs = [
-        KnowledgeDoc(source_url=d.source_url, title=d.title, content=d.content)
+        KnowledgeDoc(source_url=d.source_url, title=d.title, content=d.content, topic=d.topic)
         for d in seed_documents()
     ]
     return {"seeded": ingest_documents(docs)}

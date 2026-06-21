@@ -13,6 +13,7 @@ from typing import Any
 from collector.config import get_settings
 from collector.ingest import embed_texts
 from collector.llm import glm_chat
+from collector.topics import topic_for_question
 
 _SYSTEM = (
     "You are a Path of Exile 2 advisor for the league given in context. Answer ONLY from the "
@@ -51,7 +52,7 @@ def retrieve(question: str, k: int = 6) -> RagContext:
         reverse=True,
     )
     return RagContext(
-        chunks=search_knowledge(query_vec, limit=k),
+        chunks=search_knowledge(query_vec, limit=k, topic=topic_for_question(question)),
         farms=latest_farm_strategies(league, limit=5),
         my_snapshot=latest_my_snapshot(),
         prices=prices[:25],
