@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from openai import OpenAI
 
 from collector.config import get_settings
+from collector.topics import classify_topic
 from db.models import KnowledgeChunk
 from db.repo import upsert_knowledge_chunk
 
@@ -22,11 +23,16 @@ _MAX_CHARS = 8000  # keep each chunk within a sane embedding window
 
 @dataclass
 class KnowledgeDoc:
-    """A piece of qualitative community knowledge, ready to embed + store."""
+    """A piece of qualitative community knowledge, ready to embed + store.
+
+    `topic` lets a producer tag the lane explicitly (the craft seed does); when left None it is
+    auto-classified from the text at ingest time (see collector.topics).
+    """
 
     source_url: str
     title: str
     content: str
+    topic: str | None = None
 
 
 def _embeddings_client() -> OpenAI:
@@ -62,7 +68,11 @@ def ingest_documents(docs: list[KnowledgeDoc]) -> int:
     for doc, vector in zip(docs, vectors, strict=True):
         upsert_knowledge_chunk(
             KnowledgeChunk(
-                source_url=doc.source_url, title=doc.title, content=doc.content, embedding=vector
+                source_url=doc.source_url,
+                title=doc.title,
+                content=doc.content,
+                embedding=vector,
+                topic=doc.topic or classify_topic(doc.title, doc.content),
             )
         )
     return len(docs)

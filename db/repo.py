@@ -74,14 +74,15 @@ def upsert_knowledge_chunk(chunk: KnowledgeChunk) -> None:
     """Dedup by source_url (see skill §3). Re-running a day refreshes content/embedding."""
     embedding = _vec_literal(chunk.embedding) if chunk.embedding is not None else None
     execute(
-        """INSERT INTO knowledge_chunk (source_url, title, content, embedding)
-           VALUES (%s, %s, %s, %s)
+        """INSERT INTO knowledge_chunk (source_url, title, content, embedding, topic)
+           VALUES (%s, %s, %s, %s, %s)
            ON CONFLICT (source_url) DO UPDATE
              SET title = EXCLUDED.title,
                  content = EXCLUDED.content,
                  embedding = EXCLUDED.embedding,
+                 topic = EXCLUDED.topic,
                  captured_at = now()""",
-        (chunk.source_url, chunk.title, chunk.content, embedding),
+        (chunk.source_url, chunk.title, chunk.content, embedding, chunk.topic),
     )
 
 
@@ -203,14 +204,23 @@ def knowledge_chunks_since(days: int = 2) -> list[dict[str, Any]]:
     )
 
 
-def search_knowledge(embedding: list[float], limit: int = 6) -> list[dict[str, Any]]:
-    """Cosine-similarity retrieval for RAG. Returns closest chunks first."""
+def search_knowledge(
+    embedding: list[float], limit: int = 6, topic: str | None = None
+) -> list[dict[str, Any]]:
+    """Cosine-similarity retrieval for RAG. Returns closest chunks first. When `topic` is given,
+    restrict to that lane (e.g. 'craft') so craft questions aren't diluted by farm chunks."""
+    vec = _vec_literal(embedding)
+    topic_clause = "AND topic = %s" if topic else ""
+    params: list[Any] = [vec]
+    if topic:
+        params.append(topic)
+    params += [vec, limit]
     return fetch_all(
-        """SELECT source_url, title, content,
+        f"""SELECT source_url, title, content, topic,
                   1 - (embedding <=> %s::vector) AS similarity
            FROM knowledge_chunk
-           WHERE embedding IS NOT NULL
+           WHERE embedding IS NOT NULL {topic_clause}
            ORDER BY embedding <=> %s::vector
            LIMIT %s""",
-        (_vec_literal(embedding), _vec_literal(embedding), limit),
+        tuple(params),
     )

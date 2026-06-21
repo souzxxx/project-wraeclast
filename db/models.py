@@ -53,3 +53,4 @@ class KnowledgeChunk(BaseModel):
     title: str = ""
     content: str
     embedding: list[float] | None = None
+    topic: str | None = None  # craft | farm — coarse lane for RAG/chat filtering
