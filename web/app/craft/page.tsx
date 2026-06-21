@@ -8,6 +8,30 @@ import { applyOrb, canApply, newBase, type Item } from "./engine";
 type PriceMap = Record<string, { chaos: number | null; divine: number | null }>;
 type LedgerEntry = { label: string; chaos: number | null };
 type CraftCard = { source_url: string; title: string; snippet: string };
+type EVMethod = {
+  name: string;
+  item_base: string;
+  output: string;
+  mechanics: string[];
+  success_prob: number | null;
+  expected_cost_div: number | null;
+  roi_pct: number | null;
+  priced: boolean;
+  missing_prices: string[];
+};
+type Guide = {
+  name: string;
+  item_base: string;
+  budget: string | null;
+  mechanics: string[];
+  expected_cost_div: number | null;
+  roi_pct: number | null;
+  overview: string;
+  steps: string[];
+  items: { name: string; purpose: string }[];
+  faq: { q: string; a: string }[];
+  sources: { url: string; title: string }[];
+};
 
 const CAP: Record<Item["rarity"], number> = { normal: 0, magic: 1, rare: 3 };
 
@@ -17,7 +41,212 @@ function fmt(n: number): string {
   return n.toFixed(2);
 }
 
+// Near-zero-cost crafts produce astronomical ROI %, so show those as a multiplier instead.
+function fmtRoi(roi: number | null): string {
+  if (roi == null) return "—";
+  if (roi >= 1000) return `+${(roi / 100).toFixed(1)}×`;
+  if (roi === 0) return "0%";
+  return `${roi > 0 ? "+" : ""}${roi}%`;
+}
+
+function roiClass(roi: number | null): "up" | "down" | "flat" {
+  if (roi == null || roi === 0) return "flat";
+  return roi > 0 ? "up" : "down";
+}
+
+function pct(p: number | null): string {
+  return p == null ? "—" : `${Math.round(p * 100)}% sucesso`;
+}
+
+function Mechs({ list }: { list: string[] }) {
+  if (!list?.length) return null;
+  return (
+    <div className="mech-chips">
+      {list.map((m, idx) => (
+        <span className="mech" key={`${m}-${idx}`}>
+          {m}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function CraftPage() {
+  return (
+    <main>
+      <h1>Craft</h1>
+      <p className="sub">
+        O que vale craftar agora (rankeado por ROI calculado dos preços vivos), os guias
+        passo-a-passo, e a bancada pra você treinar o fluxo antes de gastar divine.
+      </p>
+      <CraftRanking />
+      <CraftGuideList />
+      <Bench />
+      <CraftKnowledge />
+    </main>
+  );
+}
+
+function CraftRanking() {
+  const [methods, setMethods] = useState<EVMethod[] | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch(`${API}/craft/ev`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => setMethods(d.methods || []))
+      .catch((e) => setErr(String(e)));
+  }, []);
+
+  return (
+    <section className="craft-section">
+      <h2>Melhores crafts por ROI</h2>
+      <p className="meta">
+        Custo dos insumos é ao vivo (poe.ninja); chance de sucesso e valor de saída são
+        estimativas. ROI = lucro ÷ custo esperado (já com retries). ROI negativo = prejuízo hoje.
+      </p>
+      {err && <p className="meta">Não consegui carregar o ranking ({err}).</p>}
+      {!methods && !err && <p className="meta">Carregando…</p>}
+      {methods && methods.length === 0 && (
+        <p className="meta">Nenhum método ainda — chega na coleta de hoje à noite.</p>
+      )}
+      {methods && methods.length > 0 && (
+        <div className="ev-list">
+          {methods.map((m, i) => {
+            const cls = roiClass(m.roi_pct);
+            return (
+              <div className="ev-row card" key={i}>
+                <div className="ev-rank">{i + 1}</div>
+                <div className="ev-main">
+                  <div className="ev-name">{m.name}</div>
+                  <div className="meta">→ {m.output}</div>
+                  <Mechs list={m.mechanics} />
+                </div>
+                <div className="ev-econ">
+                  {m.priced && m.roi_pct != null ? (
+                    <>
+                      <span className={`roi ${cls}`}>{fmtRoi(m.roi_pct)}</span>
+                      <span className="ev-sub">
+                        ~{fmt(m.expected_cost_div ?? 0)} div · {pct(m.success_prob)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="ev-sub">
+                      custo n/d
+                      {m.missing_prices?.length ? ` · faltam ${m.missing_prices.length}` : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CraftGuideList() {
+  const [guides, setGuides] = useState<Guide[] | null>(null);
+  const [open, setOpen] = useState<number | null>(0);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch(`${API}/craft/guides`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => setGuides(d.guides || []))
+      .catch((e) => setErr(String(e)));
+  }, []);
+
+  return (
+    <section className="craft-section">
+      <h2>Guias de craft (passo a passo)</h2>
+      <p className="meta">Tutoriais em PT-BR gerados na coleta diária. Custo/ROI são calculados.</p>
+      {err && <p className="meta">Não consegui carregar os guias ({err}).</p>}
+      {!guides && !err && <p className="meta">Carregando…</p>}
+      {guides && guides.length === 0 && (
+        <p className="meta">Nenhum guia ainda — eles são gerados na coleta de hoje à noite.</p>
+      )}
+      <div className="guides">
+        {guides?.map((g, i) => {
+          const cls = roiClass(g.roi_pct);
+          return (
+            <article className="card guide" key={i}>
+              <button
+                className="guide-head"
+                onClick={() => setOpen(open === i ? null : i)}
+                aria-expanded={open === i}
+                aria-controls={`craft-guide-${i}`}
+              >
+                <span className="name">{g.name}</span>
+                <span className="meta">
+                  {g.roi_pct != null && <span className={`roi ${cls}`}>{fmtRoi(g.roi_pct)}</span>}
+                  {g.budget && <span className="tag">{g.budget}</span>}
+                  <span className="chev" aria-hidden="true">{open === i ? "▲" : "▼"}</span>
+                </span>
+              </button>
+              {open === i && (
+                <div className="guide-body" id={`craft-guide-${i}`}>
+                  <Mechs list={g.mechanics} />
+                  {g.expected_cost_div != null && (
+                    <p className="meta">
+                      Custo esperado ~{fmt(g.expected_cost_div)} div (preços vivos)
+                      {g.item_base ? ` · base ${g.item_base}` : ""}
+                    </p>
+                  )}
+                  {g.overview && <p>{g.overview}</p>}
+                  {g.steps?.length > 0 && (
+                    <>
+                      <h3>Passo a passo</h3>
+                      <ol>{g.steps.map((s, j) => <li key={j}>{s}</li>)}</ol>
+                    </>
+                  )}
+                  {g.items?.length > 0 && (
+                    <>
+                      <h3>Insumos</h3>
+                      <ul>
+                        {g.items.map((it, j) => (
+                          <li key={j}>
+                            <strong>{it.name}</strong>
+                            {it.purpose ? ` — ${it.purpose}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {g.faq?.length > 0 && (
+                    <>
+                      <h3>Dúvidas comuns</h3>
+                      <div className="faq">
+                        {g.faq.map((f, j) => (
+                          <div key={j}>
+                            <p className="q">{f.q}</p>
+                            <p className="a">{f.a}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {g.sources?.length > 0 && (
+                    <div className="sources">
+                      {g.sources.map((s, j) => (
+                        <a key={j} href={s.url} target="_blank" rel="noreferrer">
+                          {s.title || s.url}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Bench() {
   const [baseId, setBaseId] = useState(BASES[0].id);
   const base = useMemo(() => getBase(baseId), [baseId]);
   const [item, setItem] = useState<Item>(() => newBase(getBase(BASES[0].id)));
@@ -28,7 +257,6 @@ export default function CraftPage() {
   const [pricesOk, setPricesOk] = useState<boolean | null>(null);
   const [slam, setSlam] = useState(0);
 
-  // live currency prices for the cost ledger
   useEffect(() => {
     fetch(`${API}/prices`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -42,7 +270,6 @@ export default function CraftPage() {
       .catch(() => setPricesOk(false));
   }, []);
 
-  // reset the bench when the base changes
   useEffect(() => {
     setItem(newBase(base));
     setLedger([]);
@@ -94,12 +321,9 @@ export default function CraftPage() {
   const totalDiv = divineChaos && divineChaos > 0 ? totalChaos / divineChaos : null;
 
   return (
-    <main>
-      <h1>Bancada de Craft</h1>
-      <p className="sub">
-        Aplique orbs e veja o item evoluir — o custo é somado em tempo real com os preços do
-        poe.ninja. Aprenda o fluxo do craft do PoE2 antes de gastar divine de verdade.
-      </p>
+    <section className="craft-section">
+      <h2>Bancada — treine o fluxo</h2>
+      <p className="meta">Aplique orbs e veja o item evoluir, com o custo somado ao vivo.</p>
 
       <div className="base-picker">
         {BASES.map((b) => (
@@ -114,7 +338,6 @@ export default function CraftPage() {
       </div>
 
       <div className="bench">
-        {/* the item altar */}
         <div className="altar" data-rarity={item.rarity}>
           {slam > 0 && <span className="altar-flash" key={slam} aria-hidden="true" />}
           <div>
@@ -150,7 +373,6 @@ export default function CraftPage() {
           </div>
         </div>
 
-        {/* orbs + ledger */}
         <div className="bench-side">
           <div className="card">
             <h2>Orbs</h2>
@@ -175,7 +397,7 @@ export default function CraftPage() {
               role="status"
               aria-live="polite"
             >
-              {log ? `${log.ok ? "OK" : "—"} ${log.text}` : " "}
+              {log ? `${log.ok ? "OK" : "—"} ${log.text}` : " "}
             </p>
             <div className="bench-actions">
               <button className="btn-ghost" onClick={undo} disabled={past.length === 0}>
@@ -220,14 +442,11 @@ export default function CraftPage() {
         não os pesos reais da GGG — então use pra aprender o fluxo, não pra prever seu roll exato.
         O <strong>custo é real</strong> (preços vivos do poe.ninja).
       </p>
-
-      <h2 style={{ marginTop: "3rem" }}>Conhecimento de craft</h2>
-      <CraftGuides />
-    </main>
+    </section>
   );
 }
 
-function CraftGuides() {
+function CraftKnowledge() {
   const [cards, setCards] = useState<CraftCard[] | null>(null);
   const [err, setErr] = useState("");
 
@@ -238,22 +457,27 @@ function CraftGuides() {
       .catch((e) => setErr(String(e)));
   }, []);
 
-  if (err) return <p className="meta">Não consegui carregar os guias ({err}).</p>;
-  if (!cards) return <p className="meta">Carregando…</p>;
-  if (cards.length === 0)
-    return <p className="meta">Nenhum conhecimento de craft ainda — chega na coleta diária.</p>;
-
   return (
-    <div className="craft-cards">
-      {cards.map((c, i) => (
-        <article className="card craft-card" key={i}>
-          <p className="title">{c.title}</p>
-          {c.snippet && <p className="snippet">{c.snippet}…</p>}
-          <a href={c.source_url} target="_blank" rel="noreferrer">
-            Abrir fonte ↗
-          </a>
-        </article>
-      ))}
-    </div>
+    <section className="craft-section">
+      <h2>Conhecimento & fontes</h2>
+      {err && <p className="meta">Não consegui carregar ({err}).</p>}
+      {!cards && !err && <p className="meta">Carregando…</p>}
+      {cards && cards.length === 0 && (
+        <p className="meta">Nenhum conhecimento de craft ainda — chega na coleta diária.</p>
+      )}
+      {cards && cards.length > 0 && (
+        <div className="craft-cards">
+          {cards.map((c, i) => (
+            <article className="card craft-card" key={i}>
+              <p className="title">{c.title}</p>
+              {c.snippet && <p className="snippet">{c.snippet}…</p>}
+              <a href={c.source_url} target="_blank" rel="noreferrer">
+                Abrir fonte ↗
+              </a>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

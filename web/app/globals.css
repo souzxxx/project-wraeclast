@@ -545,6 +545,56 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 .craft-card .snippet { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.6rem; }
 .craft-card a { font-size: 0.82rem; }
 
+/* ── Craft: EV ranking + guides surface (Craft 5) ── */
+.craft-section { margin: 2.6rem 0; }
+.craft-section > h2 { margin-bottom: 0.4rem; }
+.craft-section > .meta { margin: 0 0 1.1rem; max-width: 70ch; }
+
+.ev-list { display: flex; flex-direction: column; gap: 0.7rem; }
+.ev-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 1.1rem;
+  padding: 0.9rem 1.25rem;
+}
+.ev-rank {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  color: var(--gold-dim);
+  min-width: 1.7rem;
+  text-align: center;
+}
+.ev-list .ev-row:nth-child(-n + 3) .ev-rank { color: var(--gold-bright); text-shadow: 0 0 14px rgba(240, 207, 99, 0.35); }
+.ev-main { min-width: 0; }
+.ev-name { font-family: var(--font-display); font-size: 1.02rem; color: var(--text); letter-spacing: 0.02em; }
+.ev-main .meta { font-size: 0.85rem; }
+.ev-econ { text-align: right; display: flex; flex-direction: column; gap: 0.1rem; }
+.roi { font-family: var(--font-mono); font-size: 1.18rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.roi.up { color: var(--up); }
+.roi.down { color: var(--down); }
+.roi.flat { color: var(--muted); }
+.ev-sub { font-family: var(--font-mono); font-size: 0.74rem; color: var(--muted); }
+
+.mech-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+.mech {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.015);
+}
+.guide-body .mech-chips { margin: 0 0 0.7rem; }
+
+@media (max-width: 560px) {
+  .ev-row { grid-template-columns: auto 1fr; }
+  .ev-econ { grid-column: 2; text-align: left; align-items: flex-start; margin-top: 0.3rem; }
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    CHAT tab
    ════════════════════════════════════════════════════════════════════════ */

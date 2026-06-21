@@ -40,7 +40,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [x] **Craft 4 — `craft_guide` (PT-BR)**: GLM generates per-archetype/budget guides, mirroring
       `guides.py` / `farm_guide`; refreshed daily in `run_daily`. This is the "huge craft guide".
       _(see Done)_
-- [ ] **Craft 5 — site + chat surface**: a "Craft" tab with EV-ranked methods + the guides.
+- [x] **Craft 5 — site + chat surface**: a "Craft" tab with EV-ranked methods + the guides.
+      _(see Done — chat surface already shipped in Craft 3.5)_
 - [ ] **Craft 6 — craft alerts**: flag when a craft crosses into profit (input dropped / output
       rose); surface on the site + daily report. _(was the standalone "Craft/price alerts" item)_
 
@@ -61,6 +62,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-21** — Craft 5: site surface. The "Craft" tab now leads with **EV-ranked methods**
+  (`GET /craft/ev`, ROI ranking with cost/mechanics/priced flag, green/red ROI, near-zero-cost
+  shown as a multiplier), the **PT-BR guides** accordion (`GET /craft/guides` — overview/steps/
+  insumos/FAQ), then the interactive bench, then sources. Restructured `web/app/craft/page.tsx`
+  + arcane-ledger styles. (Chat surface was already shipped in Craft 3.5.) Next build green.
 - **2026-06-21** — Craft 4: PT-BR craft guides. `collector/craft_guides.py` (GLM) writes
   execution-ready pt-BR tutorials grounded in the EV-ranked methods + craft knowledge, anchored to
   the live patch (config `poe2_patch=0.5.3`, env-overridable) so guides never claim a stale
