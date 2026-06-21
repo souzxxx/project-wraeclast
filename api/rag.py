@@ -23,6 +23,9 @@ _SYSTEM = (
     "Reply in the user's language."
 )
 
+# Cap how many prior turns we replay so a long thread can't balloon the prompt.
+_MAX_HISTORY_TURNS = 6
+
 
 @dataclass
 class RagContext:
@@ -82,16 +85,32 @@ def build_context_block(ctx: RagContext) -> str:
     return "\n".join(parts)
 
 
-def answer(question: str) -> dict[str, Any]:
+def build_messages(
+    context_block: str,
+    question: str,
+    history: list[dict[str, str]] | None = None,
+) -> list[dict[str, str]]:
+    """Assemble the GLM message list: system + freshly-retrieved context, then the last
+    `_MAX_HISTORY_TURNS` valid prior turns, then the current question last. Pure (no I/O) so the
+    history threading/bounding is unit-testable. RAG context is keyed off the *current* question
+    and shared across the whole conversation."""
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": _SYSTEM},
+        {"role": "user", "content": f"CONTEXT (for the whole conversation):\n{context_block}"},
+    ]
+    for turn in (history or [])[-_MAX_HISTORY_TURNS:]:
+        role = turn.get("role")
+        content = (turn.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": question})
+    return messages
+
+
+def answer(question: str, history: list[dict[str, str]] | None = None) -> dict[str, Any]:
     ctx = retrieve(question)
     text = glm_chat(
-        [
-            {"role": "system", "content": _SYSTEM},
-            {
-                "role": "user",
-                "content": f"CONTEXT:\n{build_context_block(ctx)}\n\nQUESTION: {question}",
-            },
-        ],
+        build_messages(build_context_block(ctx), question, history),
         model=get_settings().glm_chat_model,
         temperature=0.4,
     )

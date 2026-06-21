@@ -8,7 +8,7 @@ discovered-but-unconfigured deploy can't burn the owner's tokens.
 from __future__ import annotations
 
 import hmac
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -18,8 +18,17 @@ from collector.config import get_settings
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+class ChatTurn(BaseModel):
+    """One prior message in the conversation, replayed for multi-turn context."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
+    # Prior turns for multi-turn chat; bounded so a long thread can't blow up the request.
+    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
 
 
 def _check_access(provided: str | None) -> None:
@@ -36,4 +45,4 @@ def post_chat(req: ChatRequest, x_access_token: str = Header(default="")) -> dic
     _check_access(x_access_token)
     from api.rag import answer
 
-    return answer(req.question)
+    return answer(req.question, [turn.model_dump() for turn in req.history])
