@@ -7,8 +7,9 @@ steps, consumables + purpose, FAQ, sources), in Brazilian Portuguese. The guides
   - the current patch/league LABEL (config-driven, never hardcoded in prose).
 
 Craft is NOT just currency: the prompt spans essences, omens, abyss, runes, catalysts. The
-NUMBERS (cost/ROI) are taken from the EV engine, not the LLM — `to_rows` overrides them by name —
-so a guide can't quote an invented figure. Strict JSON, tolerant parsing (same as guides.py).
+cost/ROI COLUMNS come from the EV engine, not the LLM — `to_rows` matches each guide back to its
+method by a verbatim `id` (with a normalised-name fallback) — and the prompt forbids the model
+from quoting any figure in prose. Strict JSON, tolerant parsing (same as guides.py).
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ class _Faq(BaseModel):
 
 
 class _CraftGuide(BaseModel):
+    id: str = ""  # the method id (m0, m1, …) echoed back, so EV numbers match even if name drifts
     name: str
     item_base: str = ""
     archetype: str | None = None
@@ -79,18 +81,24 @@ _SYSTEM = (
     "just currency orbs — cover the mechanic each method uses (essences, omens, abyss, runes, "
     "soul cores, catalysts, meta-crafting). Each guide must let a player execute it PERFECTLY and "
     "answer likely doubts. "
-    "GROUNDING RULES: write for the patch/league given in context; rely ONLY on the provided "
-    "methods, knowledge and numbers — do NOT invent patch-specific balance values, and do NOT "
-    "quote a cost or ROI yourself (those are computed and attached separately). Keep each guide's "
-    "`name` EXACTLY as the provided method name so the numbers can be matched back. "
+    "GROUNDING RULES: rely ONLY on the provided methods, knowledge and numbers. "
+    "(1) Echo each method's `id` (e.g. m0) VERBATIM so its computed numbers attach back. "
+    "(2) VERSION: name ONLY the patch in the PATCH header; if any provided knowledge mentions a "
+    "different patch number, IGNORE that number — never write another version. "
+    "(3) NEVER write a cost, ROI, percentage, chance or 'div' figure in any prose field "
+    "(overview/steps/items/faq) — those are computed and attached separately; describe steps "
+    "qualitatively instead. "
+    "(4) Catalysts add quality to a Rare that boosts the magnitude of EXISTING modifiers of the "
+    "matching type; a catalyst alone does not add a new mod. "
     "IMPORTANT: write every TEXT VALUE in BRAZILIAN PORTUGUESE (pt-BR) — overview, steps, item "
     "purposes, faq. Keep JSON keys in English exactly as the schema, and keep proper nouns "
     "(item/currency/mod names) in their in-game form. Output STRICT JSON only — no markdown. "
-    'Schema: {"guides":[{"name"(exact method name),"item_base","archetype","budget":"low|med|high",'
-    '"mechanics":["essence","omen",...],"overview"(2-3 frases),"steps":["passos concretos em '
-    'ordem"],"items":[{"name","purpose"}](orbs/essences/omens/runas/catalysts e por quê),'
+    'Schema: {"guides":[{"id"(the method id, e.g. m0),"name"(the method name),"item_base",'
+    '"archetype","budget":"low|med|high","mechanics":["essence","omen",...],'
+    '"overview"(2-3 frases),"steps":["passos concretos em ordem, SEM números de custo/ROI"],'
+    '"items":[{"name","purpose"}](orbs/essences/omens/runas/catalysts e por quê),'
     '"faq":[{"q","a"}](dúvidas e erros comuns),"sources":[{"url","title"}]}]}. '
-    "Seja específico e prático. Custo e ROI são ESTIMATIVAS calculadas dos preços vivos."
+    "Seja específico e prático."
 )
 
 
@@ -112,15 +120,23 @@ def parse_guides_json(text: str) -> _GuidesResponse:
         raise ValueError(f"craft guides JSON failed schema: {exc}") from exc
 
 
+def _norm(s: str | None) -> str:
+    return " ".join((s or "").casefold().split())
+
+
 def to_rows(
-    resp: _GuidesResponse, ev_by_name: dict[str, dict[str, Any]] | None = None
+    resp: _GuidesResponse, methods_ev: list[dict[str, Any]] | None = None
 ) -> list[dict[str, Any]]:
-    """Project parsed guides to rows, taking the cost/ROI from the EV engine (by name match) so
-    the numbers are calculated, not LLM-invented. Sorted best-ROI first (None last)."""
-    ev_by_name = ev_by_name or {}
+    """Project parsed guides to rows, taking cost/ROI from the EV engine — matched back to each
+    method by its verbatim `id` (m0, m1, …), falling back to a normalised name — so the numbers
+    are calculated, never LLM-invented even if the model tweaks the name. Best-ROI first (None
+    last)."""
+    methods_ev = methods_ev or []
+    by_id = {f"m{i}": m for i, m in enumerate(methods_ev)}
+    by_name = {_norm(m.get("name")): m for m in methods_ev if m.get("name")}
     rows: list[dict[str, Any]] = []
     for g in resp.guides[:MAX_GUIDES]:
-        ev = ev_by_name.get(g.name, {})
+        ev = by_id.get(g.id.strip()) or by_name.get(_norm(g.name)) or {}
         rows.append(
             {
                 "name": g.name,
@@ -158,11 +174,14 @@ def build_prompt(
             f"{econ} | success {m.get('success_prob')} | steps: {' / '.join(m.get('steps') or [])}"
         )
 
-    methods_block = "\n".join(fmt(m) for m in methods_ev[:MAX_GUIDES])
+    methods_block = "\n".join(
+        f"m{i}: {fmt(m)}" for i, m in enumerate(methods_ev[:MAX_GUIDES])
+    )
     k = [f"- {x.get('title')}: {(x.get('content') or '')[:700]}" for x in knowledge[:30]]
     return (
-        f"PATCH: PoE2 {patch} — league {league}\n\n"
-        "EV-RANKED CRAFT METHODS (numbers are computed from live prices; use them, don't invent):\n"
+        f"PATCH: PoE2 {patch} — league {league} (the ONLY version you may name)\n\n"
+        "EV-RANKED CRAFT METHODS (each has an id m#; echo it back. Numbers are computed — use "
+        "them, never write them in prose):\n"
         + methods_block
         + "\n\nCRAFT KNOWLEDGE:\n"
         + "\n".join(k)
@@ -181,8 +200,7 @@ def generate(
         model=get_settings().glm_curation_model,
         temperature=0.4,
     )
-    ev_by_name = {m.get("name"): m for m in methods_ev if m.get("name")}
-    return to_rows(parse_guides_json(text), ev_by_name)
+    return to_rows(parse_guides_json(text), methods_ev)
 
 
 def run() -> int:

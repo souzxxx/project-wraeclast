@@ -16,13 +16,11 @@ RAW = """```json
 ]}
 ```"""
 
-EV = {
-    "+3 Spell Skills Wand": {
-        "expected_cost_div": 11.42, "roi_pct": 425,
-        "item_base": "Siphoning Wand", "mechanics": ["essence", "omen", "currency"],
-    },
-    "Belt barato": {"expected_cost_div": 0.03, "roi_pct": 8980, "mechanics": ["currency"]},
-}
+METHODS = [
+    {"name": "+3 Spell Skills Wand", "expected_cost_div": 11.42, "roi_pct": 425,
+     "item_base": "Siphoning Wand", "mechanics": ["essence", "omen", "currency"]},
+    {"name": "Belt barato", "expected_cost_div": 0.03, "roi_pct": 8980, "mechanics": ["currency"]},
+]
 
 
 def test_parse_tolerant():
@@ -32,15 +30,23 @@ def test_parse_tolerant():
 
 
 def test_to_rows_takes_numbers_from_ev_and_sorts_by_roi():
-    rows = to_rows(parse_guides_json(RAW), EV)
+    # RAW guides carry no id -> matched back by normalised name
+    rows = to_rows(parse_guides_json(RAW), METHODS)
     assert [r["name"] for r in rows] == ["Belt barato", "+3 Spell Skills Wand"]  # 8980 > 425
     assert rows[0]["roi_pct"] == 8980 and rows[0]["expected_cost_div"] == 0.03
     assert rows[1]["roi_pct"] == 425 and rows[1]["expected_cost_div"] == 11.42
     assert rows[0]["mechanics"] == ["currency"]  # falls back to EV when guide omits them
 
 
+def test_to_rows_matches_by_id_even_when_name_drifts():
+    # the model renamed/translated the guide but echoed the id -> numbers still attach
+    raw = '{"guides":[{"id":"m1","name":"Cinto Barato (traduzido!)","steps":["x"]}]}'
+    rows = to_rows(parse_guides_json(raw), METHODS)
+    assert rows[0]["roi_pct"] == 8980 and rows[0]["expected_cost_div"] == 0.03
+
+
 def test_to_rows_without_ev_leaves_numbers_none():
-    # numbers are calculated, never invented — no EV match means no number
+    # numbers are calculated, never invented — no method to match means no number
     rows = to_rows(parse_guides_json(RAW))
     assert all(r["roi_pct"] is None and r["expected_cost_div"] is None for r in rows)
 
