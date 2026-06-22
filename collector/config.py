@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     glm_base_url: str = "https://api.z.ai/api/coding/paas/v4"
     glm_chat_model: str = "glm-5.2"
     glm_curation_model: str = "glm-5.2"
-    glm_timeout_seconds: float = 180.0
+    glm_timeout_seconds: float = 300.0  # headroom for long 16k-token guide answers (was 180)
     # glm-5.x are reasoning models — budget for thinking + a long answer. The daily PT-BR guide
     # batches (farm + craft, ~6-8 guides each) overran 6000 and got truncated mid-JSON, so this
     # is generous; the guide parsers also salvage complete guides if a response is still cut off.
