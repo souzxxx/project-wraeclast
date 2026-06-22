@@ -138,6 +138,7 @@ def answer(question: str, history: list[dict[str, str]] | None = None) -> dict[s
         build_messages(build_context_block(ctx), question, history),
         model=get_settings().glm_chat_model,
         temperature=0.4,
+        timeout=get_settings().glm_chat_timeout_seconds,  # cap under the Vercel function limit
     )
     return {
         "answer": text,

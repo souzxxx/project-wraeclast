@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     glm_chat_model: str = "glm-5.2"
     glm_curation_model: str = "glm-5.2"
     glm_timeout_seconds: float = 300.0  # headroom for long 16k-token guide answers (was 180)
+    # The /chat path runs on Vercel (function time limit), so it uses a SHORTER timeout than the
+    # Actions-side guide batches — it must finish well before the serverless function is killed.
+    glm_chat_timeout_seconds: float = 90.0
     # glm-5.x are reasoning models — budget for thinking + a long answer. The daily PT-BR guide
     # batches overran 6000 (truncated mid-JSON); the verbose FARM batch (atlas trees etc.) still
     # truncated at 16000, so go to 24000. The guide parsers also salvage complete guides if a
@@ -120,7 +123,10 @@ class Settings(BaseSettings):
     # The owner enters it once in the site; it is NOT baked into the frontend bundle.
     # If empty, /chat is disabled (fail-closed) so an unconfigured deploy can't be abused.
     chat_access_token: str = ""
-    cors_origins: str = "http://localhost:3000"
+    # Comma-separated allowed browser origins for the API. MUST include the web app's production
+    # domain or the browser blocks every fetch (CORS). Defaults below cover local dev + the known
+    # Vercel web project; override via CORS_ORIGINS env on the API deploy when the domain changes.
+    cors_origins: str = "http://localhost:3000,https://wraeclast-web.vercel.app"
 
     # ── Obsidian ──
     obsidian_vault_dir: str = "./vault"

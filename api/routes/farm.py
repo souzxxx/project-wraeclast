@@ -16,7 +16,7 @@ def get_farm_ranking(limit: int = 20) -> dict[str, Any]:
     from db.repo import latest_farm_strategies
 
     league = get_settings().poe2_league
-    strategies = latest_farm_strategies(league, limit=limit)
+    strategies = latest_farm_strategies(league, limit=max(1, min(limit, 100)))
     return {
         "league": league,
         "note": "Profit/hour is an estimate (divine), from community guides + ninja prices.",

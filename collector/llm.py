@@ -8,6 +8,8 @@ answer (hence the generous max_tokens default).
 
 from __future__ import annotations
 
+from typing import Any
+
 from openai import OpenAI
 
 from collector.config import get_settings
@@ -26,11 +28,17 @@ def glm_chat(
     model: str | None = None,
     temperature: float = 0.3,
     max_tokens: int | None = None,
+    timeout: float | None = None,
 ) -> str:
-    """Run a streamed chat completion and return the full assembled text."""
+    """Run a streamed chat completion and return the full assembled text. `timeout` overrides the
+    client default per call — the serverless /chat path passes a short one so it can't outlive the
+    Vercel function limit, while the Actions-side guide batches keep the generous default."""
     s = get_settings()
     client = _client()
-    stream = client.chat.completions.create(
+    create: Any = client.chat.completions.create
+    if timeout is not None:
+        create = client.with_options(timeout=timeout).chat.completions.create
+    stream = create(
         model=model or s.glm_chat_model,
         messages=messages,
         temperature=temperature,
