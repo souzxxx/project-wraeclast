@@ -60,7 +60,7 @@ export default function Home() {
                   {i + 1}. {f.name} {f.risk && <span className="tag">{f.risk}</span>}
                 </div>
                 <div className="meta">
-                  <span className="profit">~{f.est_profit_per_hour ?? "?"} chaos/h</span>
+                  <span className="profit">~{f.est_profit_per_hour ?? "?"} div/h</span>
                   {f.investment_required != null && ` · invest ${f.investment_required}`}
                 </div>
                 {f.summary && <div className="meta">{f.summary}</div>}

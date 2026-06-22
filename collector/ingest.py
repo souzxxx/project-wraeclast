@@ -43,20 +43,26 @@ def _embeddings_client() -> OpenAI:
     return OpenAI(api_key=key, base_url=s.embeddings_base_url)
 
 
+_EMBED_BATCH = 64  # cap inputs per request (a daily run can have ~80+ docs)
+
+
 def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Return one embedding vector per input text."""
+    """Return one embedding vector per input text, in order. Batched so a big day's docs don't
+    exceed the provider's per-request input limit."""
     if not texts:
         return []
     settings = get_settings()
     client = _embeddings_client()
-    # Request the target dimension (Matryoshka truncation) so the vector matches the DB column
-    # regardless of the model's native size (e.g. gemini-embedding-001 is 3072 by default).
-    resp = client.embeddings.create(
-        model=settings.embeddings_model,
-        input=[t[:_MAX_CHARS] for t in texts],
-        dimensions=settings.embedding_dim,
-    )
-    return [item.embedding for item in resp.data]
+    out: list[list[float]] = []
+    for i in range(0, len(texts), _EMBED_BATCH):
+        batch = [t[:_MAX_CHARS] for t in texts[i : i + _EMBED_BATCH]]
+        # Request the target dimension (Matryoshka truncation) so the vector matches the DB
+        # column regardless of the model's native size (gemini-embedding-001 is 3072 by default).
+        resp = client.embeddings.create(
+            model=settings.embeddings_model, input=batch, dimensions=settings.embedding_dim
+        )
+        out.extend(item.embedding for item in resp.data)
+    return out
 
 
 def ingest_documents(docs: list[KnowledgeDoc]) -> int:
