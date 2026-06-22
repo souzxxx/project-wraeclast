@@ -56,14 +56,18 @@ def build_sparklines(
         if item_type and r.get("item_type") not in (None, item_type):
             continue
         name = r.get("name")
-        chaos = r.get("chaos_value")
-        if not name or chaos is None:
+        # PoE2's ninja feed is divine-denominated (chaos_value is NULL); fall back to divine_value
+        # so the series isn't permanently empty. Mirrors api.craft_ev.price_index.
+        raw = r.get("chaos_value")
+        if raw is None:
+            raw = r.get("divine_value")
+        if not name or raw is None:
             continue
         ts = _to_datetime(r.get("captured_at"))
         if ts is None:
             continue
         try:
-            value = float(chaos)
+            value = float(raw)
         except (TypeError, ValueError):
             continue
         days = by_name.setdefault(name, {})

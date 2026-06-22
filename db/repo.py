@@ -307,7 +307,7 @@ def price_snapshots_since(league: str, days: int = 3) -> list[dict[str, Any]]:
 def price_history_since(league: str, days: int = 14) -> list[dict[str, Any]]:
     """Currency price snapshots over a recent window, for the 'Hoje' tab sparklines."""
     return fetch_all(
-        """SELECT name, item_type, chaos_value, captured_at
+        """SELECT name, item_type, chaos_value, divine_value, captured_at
            FROM price_snapshot
            WHERE league = %s AND item_type = 'currency'
              AND captured_at >= now() - make_interval(days => %s)

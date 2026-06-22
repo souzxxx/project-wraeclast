@@ -150,7 +150,7 @@ function PriceSparklines() {
           <div className="spark-row" key={s.name}>
             <span className="name">{s.name}</span>
             <Sparkline points={s.points} />
-            <span className="val">{s.latest} c</span>
+            <span className="val">{s.latest} div</span>
             <span className={`chg ${cls}`}>{label}</span>
           </div>
         );

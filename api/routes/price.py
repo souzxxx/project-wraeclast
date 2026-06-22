@@ -21,6 +21,6 @@ def get_price_history(days: int = 14, limit: int = 12) -> dict[str, Any]:
     sparklines = build_sparklines(rows, max_series=limit, max_points=days)
     return {
         "league": league,
-        "note": "Chaos value per day (latest snapshot each day). Estimates from poe.ninja.",
+        "note": "Value per day (divine for PoE2; latest snapshot each day). poe.ninja estimates.",
         "sparklines": [s.model_dump() for s in sparklines],
     }

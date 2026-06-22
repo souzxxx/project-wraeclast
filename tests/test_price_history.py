@@ -31,6 +31,18 @@ def test_one_point_per_day_latest_snapshot_wins():
     assert s.points == [7, 6]  # day 18 collapsed to its latest (7), then day 19
 
 
+def test_builds_from_divine_value_when_chaos_is_null():
+    # PoE2's feed leaves chaos_value NULL and fills divine_value — the series must still build.
+    rows = [
+        {"name": "Exalted", "item_type": "currency", "chaos_value": None, "divine_value": 0.02,
+         "captured_at": D1},
+        {"name": "Exalted", "item_type": "currency", "chaos_value": None, "divine_value": 0.03,
+         "captured_at": D3},
+    ]
+    [s] = build_sparklines(rows)
+    assert s.name == "Exalted" and s.points == [0.02, 0.03]
+
+
 def test_drops_series_shorter_than_min_points():
     rows = [_row("OneDay", 100, D3)]  # only a single day -> no line to draw
     assert build_sparklines(rows) == []
