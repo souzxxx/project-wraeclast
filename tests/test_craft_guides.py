@@ -72,6 +72,13 @@ def test_build_prompt_flags_unpriced_methods():
     assert "not yet priceable" in p and "Foo Rune" in p
 
 
+def test_parse_salvages_truncated_response():
+    # first guide complete, second cut off mid-object (token overrun) — keep the complete one
+    truncated = '{"guides":[{"id":"m0","name":"A","steps":["x"]},{"id":"m1","name":"B","overv'
+    resp = parse_guides_json(truncated)
+    assert [g.name for g in resp.guides] == ["A"]
+
+
 def test_parse_rejects_garbage():
     with pytest.raises(ValueError):
         parse_guides_json("not json")

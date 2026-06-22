@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError, field_validator
 
 from collector.config import get_settings
+from collector.json_salvage import iter_array_objects
 from collector.llm import glm_chat
 
 MAX_GUIDES = 6
@@ -101,13 +102,23 @@ def parse_guides_json(text: str) -> _GuidesResponse:
     if start > 0:
         cleaned = cleaned[start:]
     try:
-        data = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"guides JSON invalid: {exc}") from exc
+        return _GuidesResponse.model_validate(json.loads(cleaned))
+    except (json.JSONDecodeError, ValidationError):
+        # Salvage every complete guide from a truncated/garbled response (token overrun): a cut
+        # tail then costs only the last guide, not the whole daily batch.
+        guides = [
+            g for obj in iter_array_objects(cleaned, "guides") if (g := _validate_guide(obj))
+        ]
+        if not guides:
+            raise ValueError("guides JSON unrecoverable") from None
+        return _GuidesResponse(guides=guides)
+
+
+def _validate_guide(obj: dict[str, Any]) -> _Guide | None:
     try:
-        return _GuidesResponse.model_validate(data)
-    except ValidationError as exc:
-        raise ValueError(f"guides JSON failed schema: {exc}") from exc
+        return _Guide.model_validate(obj)
+    except ValidationError:
+        return None
 
 
 def to_rows(resp: _GuidesResponse) -> list[dict[str, Any]]:

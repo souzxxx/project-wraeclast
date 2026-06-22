@@ -23,7 +23,10 @@ class Settings(BaseSettings):
     glm_chat_model: str = "glm-5.2"
     glm_curation_model: str = "glm-5.2"
     glm_timeout_seconds: float = 180.0
-    glm_max_tokens: int = 6000  # glm-5.x are reasoning models — need budget for thinking + answer
+    # glm-5.x are reasoning models — budget for thinking + a long answer. The daily PT-BR guide
+    # batches (farm + craft, ~6-8 guides each) overran 6000 and got truncated mid-JSON, so this
+    # is generous; the guide parsers also salvage complete guides if a response is still cut off.
+    glm_max_tokens: int = 16000
     # z.ai Coding Plan has no embeddings; default to Gemini's OpenAI-compatible endpoint
     # (free tier). gemini-embedding-001 defaults to 3072 dims but supports truncation to
     # `dimensions` (Matryoshka) — we request 1024 to fit the DB column + pgvector hnsw (<=2000).
