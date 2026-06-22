@@ -24,9 +24,10 @@ class Settings(BaseSettings):
     glm_curation_model: str = "glm-5.2"
     glm_timeout_seconds: float = 300.0  # headroom for long 16k-token guide answers (was 180)
     # glm-5.x are reasoning models — budget for thinking + a long answer. The daily PT-BR guide
-    # batches (farm + craft, ~6-8 guides each) overran 6000 and got truncated mid-JSON, so this
-    # is generous; the guide parsers also salvage complete guides if a response is still cut off.
-    glm_max_tokens: int = 16000
+    # batches overran 6000 (truncated mid-JSON); the verbose FARM batch (atlas trees etc.) still
+    # truncated at 16000, so go to 24000. The guide parsers also salvage complete guides if a
+    # response is still cut off, so this is a generous ceiling, not a guarantee.
+    glm_max_tokens: int = 24000
     # z.ai Coding Plan has no embeddings; default to Gemini's OpenAI-compatible endpoint
     # (free tier). gemini-embedding-001 defaults to 3072 dims but supports truncation to
     # `dimensions` (Matryoshka) — we request 1024 to fit the DB column + pgvector hnsw (<=2000).
