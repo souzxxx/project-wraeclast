@@ -81,6 +81,7 @@ export default function Home() {
           ) : (
             state && <p className="meta">Nenhum snapshot de personagem ainda.</p>
           )}
+          {state?.my_snapshot && <BuildDiff />}
           <p className="meta" style={{ marginTop: "1rem" }}>
             Quer testar um craft ou perguntar pro oráculo?{" "}
             <Link href="/craft">Bancada de craft</Link> · <Link href="/chat">Chat</Link>
@@ -155,6 +156,54 @@ function PriceSparklines() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+type BuildDiffResp = {
+  comparable: boolean;
+  meta_class?: string;
+  consider_adding?: string[];
+  consider_cutting?: string[];
+  shared?: string[];
+};
+
+function BuildDiff() {
+  const [diff, setDiff] = useState<BuildDiffResp | null>(null);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch(`${API}/build`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then(setDiff)
+      .catch((e) => setErr(String(e)));
+  }, []);
+
+  if (err) return null; // 404 = no snapshot; just hide
+  if (!diff) return <p className="meta">Comparando com o meta…</p>;
+  if (!diff.comparable)
+    return (
+      <p className="meta">
+        Sem build de meta pra comparar ainda (a classe pode não estar no ladder do ninja).
+      </p>
+    );
+
+  const add = diff.consider_adding ?? [];
+  const cut = diff.consider_cutting ?? [];
+  return (
+    <div className="meta" style={{ marginTop: "0.6rem" }}>
+      <div>vs meta de {diff.meta_class}:</div>
+      {add.length > 0 && (
+        <div>
+          <span className="chg up">+ considere</span> {add.slice(0, 6).join(", ")}
+        </div>
+      )}
+      {cut.length > 0 && (
+        <div>
+          <span className="chg down">− considere cortar</span> {cut.slice(0, 6).join(", ")}
+        </div>
+      )}
+      {add.length === 0 && cut.length === 0 && <div>alinhado com o meta ({(diff.shared ?? []).length} gems em comum) ✓</div>}
     </div>
   );
 }

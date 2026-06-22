@@ -47,6 +47,20 @@ def test_to_farm_strategies_ranks_by_profit():
     assert strategies[0].league == "test-league"
 
 
+def test_prefers_calculated_formula_over_llm_freetext():
+    # the model gives an inflated free-text 999 AND real components -> the CALCULATED number wins
+    raw = ('{"strategies":[{"name":"X","est_profit_per_hour":999,'
+           '"expected_drops_per_map":2,"unit_price_chaos":5,"clear_time_minutes":6}]}')
+    [s] = to_farm_strategies(parse_llm_json(raw), "L")
+    assert s.est_profit_per_hour == 100.0  # (2*5)*(60/6), not 999
+
+
+def test_falls_back_to_llm_estimate_when_no_components():
+    raw = '{"strategies":[{"name":"Y","est_profit_per_hour":42}]}'  # no formula components
+    [s] = to_farm_strategies(parse_llm_json(raw), "L")
+    assert s.est_profit_per_hour == 42.0
+
+
 def test_to_markdown_contains_estimate_disclaimer():
     strategies = to_farm_strategies(parse_llm_json('{"strategies":[]}'), "test-league")
     md = to_markdown(strategies, "test-league")
