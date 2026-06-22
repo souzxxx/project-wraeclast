@@ -6,7 +6,7 @@ import { BASES, ORBS, getBase, type OrbDef } from "./data";
 import { applyOrb, canApply, newBase, type Item } from "./engine";
 
 type PriceMap = Record<string, { chaos: number | null; divine: number | null }>;
-type LedgerEntry = { label: string; chaos: number | null };
+type LedgerEntry = { label: string; div: number | null };
 type CraftCard = { source_url: string; title: string; snippet: string };
 type EVMethod = {
   name: string;
@@ -322,9 +322,15 @@ function Bench() {
     setLog(null);
   }, [base]);
 
-  function priceChaos(orb: OrbDef): number | null {
-    if (!orb.priceName) return null;
-    return prices[orb.priceName]?.chaos ?? null;
+  // PoE2's feed is divine-denominated (divine_value set, chaos_value NULL); use it directly, and
+  // only fall back to converting a chaos price via the Divine Orb rate (PoE1-style feeds).
+  const divineInChaos = prices["Divine Orb"]?.chaos ?? null;
+  function orbDiv(orb: OrbDef): number | null {
+    const p = orb.priceName ? prices[orb.priceName] : null;
+    if (!p) return null;
+    if (p.divine != null) return p.divine;
+    if (p.chaos != null && divineInChaos && divineInChaos > 0) return p.chaos / divineInChaos;
+    return null;
   }
 
   function onOrb(orb: OrbDef) {
@@ -336,7 +342,7 @@ function Bench() {
     }
     setPast((p) => [...p.slice(-49), { item, ledger }]);
     setItem(res.item);
-    setLedger((l) => [...l, { label: orb.label, chaos: priceChaos(orb) }]);
+    setLedger((l) => [...l, { label: orb.label, div: orbDiv(orb) }]);
     setLog({ text: res.log, ok: true });
     setSlam((s) => s + 1);
   }
@@ -361,9 +367,8 @@ function Bench() {
   const suffixes = item.mods.filter((m) => m.affix === "suffix");
   const cap = CAP[item.rarity];
 
-  const totalChaos = ledger.reduce((s, e) => s + (e.chaos ?? 0), 0);
-  const divineChaos = prices["Divine Orb"]?.chaos ?? null;
-  const totalDiv = divineChaos && divineChaos > 0 ? totalChaos / divineChaos : null;
+  const totalDiv = ledger.reduce((s, e) => s + (e.div ?? 0), 0);
+  const unpricedCount = ledger.filter((e) => e.div == null).length;
 
   return (
     <section className="craft-section">
@@ -457,8 +462,8 @@ function Bench() {
           <div className="card ledger">
             <h2>Custo (ao vivo)</h2>
             <div className="ledger-total">
-              <span className="big">{totalDiv != null ? `${fmt(totalDiv)} div` : "—"}</span>
-              <span className="chaos">{fmt(totalChaos)} chaos</span>
+              <span className="big">{`${fmt(totalDiv)} div`}</span>
+              <span className="chaos">{unpricedCount > 0 ? `${unpricedCount} sem preço` : ""}</span>
             </div>
             {ledger.length === 0 ? (
               <p className="ledger-empty">Nenhum orb aplicado ainda.</p>
@@ -467,7 +472,7 @@ function Bench() {
                 {ledger.map((e, i) => (
                   <div className="ledger-row" key={i}>
                     <span className="ln">{e.label}</span>
-                    <span className="lc">{e.chaos != null ? `${fmt(e.chaos)} c` : "n/d"}</span>
+                    <span className="lc">{e.div != null ? `${fmt(e.div)} div` : "n/d"}</span>
                   </div>
                 ))}
               </div>

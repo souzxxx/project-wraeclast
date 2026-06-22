@@ -31,9 +31,18 @@ from collector.config import get_settings
 # Thresholds. A move must clear BOTH the relative and absolute bars to count as "notable"
 # (a 30% swing on a 0.1-chaos item is noise); the steeper bar additionally flags an anomaly.
 PRICE_MOVE_MIN_PCT = 25.0
-PRICE_MOVE_MIN_CHAOS = 2.0
+# Absolute floor to kill micro-noise. PoE2 prices are divine-denominated (~0.001–1 div for most
+# currencies, Divine = 1.0), so this is a divine-scaled value, not chaos.
+PRICE_MOVE_MIN_VALUE = 0.02
 PRICE_ANOMALY_PCT = 50.0
 TOP_N = 5
+
+
+def _row_value(row: dict[str, Any]) -> float | None:
+    """Price in the feed's own denomination — chaos if present, else divine (PoE2). Mirrors
+    api.craft_ev.price_index so the daily report isn't blind to the divine-denominated feed."""
+    v = row.get("chaos_value")
+    return v if v is not None else row.get("divine_value")
 
 
 # ── models ────────────────────────────────────────────────────────────────────────
@@ -171,15 +180,15 @@ def notable_price_moves(
     latest_by_key = _dedupe_latest(latest_prices, ("name", "item_type"))
     moves: list[PriceMove] = []
     for key, row in latest_by_key.items():
-        now_val = row.get("chaos_value")
+        now_val = _row_value(row)
         old_row = prev_by_key.get(key)
         if old_row is None or now_val is None:
             continue
-        old_val = old_row.get("chaos_value")
+        old_val = _row_value(old_row)
         if not old_val or old_val <= 0:
             continue
         pct = (now_val - old_val) / old_val * 100.0
-        if abs(pct) >= PRICE_MOVE_MIN_PCT and abs(now_val - old_val) >= PRICE_MOVE_MIN_CHAOS:
+        if abs(pct) >= PRICE_MOVE_MIN_PCT and abs(now_val - old_val) >= PRICE_MOVE_MIN_VALUE:
             moves.append(
                 PriceMove(
                     name=row.get("name") or "?",
@@ -235,7 +244,7 @@ def compute_insight(
             direction = "jumped" if m.pct > 0 else "dropped"
             anomalies.append(
                 f"{m.name} {direction} {m.pct:+.0f}% "
-                f"({m.from_chaos} → {m.to_chaos} chaos)"
+                f"({m.from_chaos} → {m.to_chaos} div)"
             )
     for a in alerts:
         if a.kind == "into_profit":
@@ -302,7 +311,7 @@ def render_insight(insight: DailyInsight) -> str:
             arrow = "📈" if m.pct > 0 else "📉"
             lines.append(
                 f"- {arrow} **{m.name}** ({m.item_type}): "
-                f"{m.from_chaos} → {m.to_chaos} chaos ({m.pct:+.1f}%)"
+                f"{m.from_chaos} → {m.to_chaos} div ({m.pct:+.1f}%)"
             )
     else:
         lines.append("_No moves past the threshold._")

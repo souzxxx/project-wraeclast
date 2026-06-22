@@ -16,11 +16,13 @@ router = APIRouter(prefix="/price-history", tags=["price"])
 def get_price_history(days: int = 14, limit: int = 12) -> dict[str, Any]:
     from db.repo import price_history_since
 
+    days = max(2, min(days, 60))  # guard make_interval + the window against bad input
+    limit = max(1, min(limit, 50))
     league = get_settings().poe2_league
     rows = price_history_since(league, days=days)
     sparklines = build_sparklines(rows, max_series=limit, max_points=days)
     return {
         "league": league,
-        "note": "Chaos value per day (latest snapshot each day). Estimates from poe.ninja.",
+        "note": "Value per day (divine for PoE2; latest snapshot each day). poe.ninja estimates.",
         "sparklines": [s.model_dump() for s in sparklines],
     }

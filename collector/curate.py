@@ -166,12 +166,16 @@ def parse_llm_json(text: str) -> _LLMResponse:
 def to_farm_strategies(resp: _LLMResponse, league: str) -> list[FarmStrategy]:
     out: list[FarmStrategy] = []
     for s in resp.strategies:
-        # Prefer the model's source-grounded per-hour estimate; the naive formula on
-        # hallucinated components tends to go negative. Fall back to the formula otherwise.
+        # Golden rule (CLAUDE.md): publish the CALCULATED profit/hour when the model supplied real
+        # formula components; its free-text est_profit_per_hour is only a fallback for when we
+        # cannot compute one (missing/zero components, where the naive formula would be useless).
         formula = estimate_profit_per_hour(
             s.expected_drops_per_map, s.unit_price_chaos, s.clear_time_minutes, s.entry_cost_chaos
         )
-        pph = s.est_profit_per_hour if s.est_profit_per_hour is not None else formula
+        has_components = (
+            s.clear_time_minutes > 0 and s.expected_drops_per_map > 0 and s.unit_price_chaos > 0
+        )
+        pph = formula if (has_components and formula > 0) else (s.est_profit_per_hour or 0.0)
         pph = max(pph, 0.0)
         out.append(
             FarmStrategy(

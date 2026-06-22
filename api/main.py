@@ -6,13 +6,17 @@ Run locally:  uvicorn api.main:app --reload
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from api.routes import build, chat, craft, farm, graph, ingest, price
 from collector.config import get_settings
+
+log = logging.getLogger("api")
 
 app = FastAPI(title="Project Wraeclast API", version="0.1.0")
 
@@ -23,6 +27,21 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def _on_unhandled(request: Request, exc: Exception) -> JSONResponse:
+    """Return a JSON 500 for unhandled errors WITH CORS headers. A base-Exception handler runs in
+    Starlette's outermost ServerErrorMiddleware, i.e. OUTSIDE the CORS middleware, so we echo the
+    allowed Origin ourselves — otherwise the browser sees an opaque 'NetworkError' (which is what
+    masked the /craft 500s when the craft tables were unmigrated) instead of a real 500."""
+    log.exception("unhandled error on %s %s", request.method, request.url.path)
+    resp = JSONResponse(status_code=500, content={"detail": "internal server error"})
+    origin = request.headers.get("origin")
+    if origin and origin in _settings.cors_origin_list:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+    return resp
 
 app.include_router(farm.router)
 app.include_router(build.router)

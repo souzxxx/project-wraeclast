@@ -67,17 +67,28 @@ def test_farm_ranking_dedupes_same_day_reruns_by_key():
 
 # ── price moves ───────────────────────────────────────────────────────────────────
 
-def test_price_moves_requires_both_pct_and_chaos_thresholds():
+def test_price_moves_requires_both_pct_and_value_thresholds():
+    # divine-scaled (PoE2): the 0.02-div absolute floor filters a big-% move on a tiny item
     latest = [
-        _price("Divine", 200, T1),      # +33% and +50 chaos -> notable
-        _price("Tiny", 0.15, T1),       # +50% but only +0.05 chaos -> filtered
-        _price("Flat", 100, T1),        # unchanged
+        _price("Divine", 2.0, T1),     # +33% and +0.5 div -> notable
+        _price("Tiny", 0.015, T1),     # +50% but only +0.005 div -> filtered by the floor
+        _price("Flat", 1.0, T1),       # unchanged
     ]
-    prev = [_price("Divine", 150, T0), _price("Tiny", 0.10, T0), _price("Flat", 100, T0)]
+    prev = [_price("Divine", 1.5, T0), _price("Tiny", 0.010, T0), _price("Flat", 1.0, T0)]
     moves = notable_price_moves(latest, prev)
-    names = [m.name for m in moves]
-    assert names == ["Divine"]
+    assert [m.name for m in moves] == ["Divine"]
     assert moves[0].pct == 33.3
+
+
+def test_price_moves_detect_divine_denominated_feed():
+    # PoE2 rows carry value in divine_value (chaos_value NULL) — moves must still be detected.
+    def _d(name, divine, when):
+        return {"name": name, "item_type": "currency", "chaos_value": None,
+                "divine_value": divine, "captured_at": when}
+
+    moves = notable_price_moves([_d("Big", 1.5, T1)], [_d("Big", 1.0, T0)])
+    assert [m.name for m in moves] == ["Big"]  # +50%, +0.5 div clears the floor
+    assert moves[0].pct == 50.0
 
 
 def test_price_moves_ignore_missing_baseline_and_zero_old():
