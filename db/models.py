@@ -51,6 +51,20 @@ class MySnapshot(BaseModel):
     passive_tree: dict[str, Any] = Field(default_factory=dict)
 
 
+class MetaBuild(BaseModel):
+    """A popular/meta build aggregated from poe.ninja builds for one character class. This is the
+    meta REFERENCE the build-diff compares the owner's character against (api/build_diff): `gems`
+    holds the most-used skills for the class with their usage %, so the diff can surface what to
+    add/cut. Shaped to be consumed directly by `compute_build_diff` (reads `char_class`+`gems`)."""
+
+    captured_at: datetime | None = None
+    league: str
+    char_class: str
+    sample_size: int = 0  # how many ladder characters of this class fed the aggregate
+    gems: list[dict[str, Any]] = Field(default_factory=list)  # [{name, usage_pct}], most-used first
+    sources: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class KnowledgeChunk(BaseModel):
     captured_at: datetime | None = None
     source_url: str

@@ -37,6 +37,7 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
         guides,
         ninja_build_client,
         ninja_client,
+        ninja_meta_client,
         rss_client,
         seed_craft_methods,
         seed_knowledge,
@@ -47,6 +48,8 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     results: dict[str, Any] = {}
     await _step("ninja_economy", ninja_client.run, results)
     await _step("my_build", lambda: ninja_build_client.run(pob_code), results)
+    # popular/meta builds per class — the /build diff reference (degrades gracefully if it fails).
+    await _step("meta_builds", ninja_meta_client.run, results)
     await _step("youtube", youtube_client.run, results)
     await _step("rss", rss_client.run, results)
     # seed curated craft knowledge before curation/guides can use it (sync -> thread).

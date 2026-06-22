@@ -21,12 +21,19 @@ def get_build_diff() -> dict[str, Any]:
             status_code=404,
             detail="No character snapshot yet. Run ninja_build_client (or supply a PoB code).",
         )
-    # Phase 0: a popular/meta build snapshot collector isn't wired yet, so meta is None and
-    # the diff degrades gracefully (returns the owner's gems + a 'not comparable' note).
+    # Compare against the popular/meta build for the owner's class (collected by
+    # ninja_meta_client). Still degrades gracefully to "not comparable" when none is available
+    # yet (no meta collected, or the class isn't represented on the builds ladder).
     meta = _load_meta_build(mine.get("char_class"))
     return compute_build_diff(mine, meta)
 
 
 def _load_meta_build(char_class: str | None) -> dict[str, Any] | None:
-    """Placeholder for the popular-build source. Returns None until wired (graceful degrade)."""
-    return None
+    """Newest meta build for the owner's class from poe.ninja. None (graceful degrade) when the
+    class is unset or nothing has been collected for it yet."""
+    if not char_class:
+        return None
+    from collector.config import get_settings
+    from db.repo import latest_meta_build
+
+    return latest_meta_build(get_settings().poe2_league, char_class)

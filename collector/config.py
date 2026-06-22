@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     ninja_profile_path: str = "/poe2/api/profile/characters"
     ninja_account: str = ""
     ninja_character: str = ""
+    # Popular/meta builds ladder (the /build meta source). PoE2 path UNCONFIRMED — config-driven
+    # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
+    # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
+    ninja_builds_path: str = "/poe2/api/builds/overview"
+    ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
+    ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
 
     # ── Community knowledge sources ──
     # Descriptive User-Agent for all outbound HTTP (ninja, youtube, rss).

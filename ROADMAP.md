@@ -46,8 +46,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       rose); surface on the site + daily report. _(see Done — the craft epic is complete 👑)_
 
 ### Other features
-- [ ] `/build` meta source: collect a few popular ninja builds for the owner's class so the
-      build-diff stops degrading to "not comparable".
+- [x] `/build` meta source: collect a few popular ninja builds for the owner's class so the
+      build-diff stops degrading to "not comparable". _(see Done)_
 - [x] Price history: store/show sparklines per currency on the "Hoje" tab (data already in
       `price_snapshot` over time). _(see Done)_
 - [ ] Mobile layout polish for the dashboard, farms, and graph.
@@ -62,6 +62,17 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-22** — `/build` meta source. New `collector/ninja_meta_client.py` aggregates
+  poe.ninja's PoE2 builds ladder per character class: groups characters by class, counts each
+  skill gem once per character, and keeps the most-used gems (≥`ninja_meta_min_usage`, capped,
+  deterministic tie-break) as a `MetaBuild`. Pure `aggregate_meta_builds` + defensive
+  `extract_characters`/`_char_gems` (tolerate list-or-wrapped payloads and gem field-name drift).
+  Model `MetaBuild` + migration `0008_meta_build` + repo `replace_meta_builds`/`latest_meta_build`
+  (per-league idempotent daily replace). Route `_load_meta_build` now reads the owner's class meta
+  so `/build` compares for real (still degrades gracefully when none collected). Wired into
+  `run_daily` after `my_build`. The live builds path is config-driven (`ninja_builds_path`,
+  unconfirmed for PoE2 — validated in deploy via the `explore` CLI, like the other ninja clients).
+  +11 offline tests.
 - **2026-06-21** — Craft 6: craft profit alerts (**craft epic complete 👑**). Pure
   `api/craft_alerts.craft_alerts` diffs craft EV across the two latest price days → flags methods
   that crossed INTO / OUT of profit (driver = live input prices). Wired into `scripts/daily_insight`
