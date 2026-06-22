@@ -10,7 +10,14 @@ import json
 from typing import Any
 
 from db.connection import execute, fetch_all, get_connection
-from db.models import CraftMethod, FarmStrategy, KnowledgeChunk, MySnapshot, PriceSnapshot
+from db.models import (
+    CraftMethod,
+    FarmStrategy,
+    KnowledgeChunk,
+    MetaBuild,
+    MySnapshot,
+    PriceSnapshot,
+)
 
 
 def _vec_literal(embedding: list[float]) -> str:
@@ -114,6 +121,39 @@ def latest_farm_strategies(league: str, limit: int = 20) -> list[dict[str, Any]]
 
 def latest_my_snapshot() -> dict[str, Any] | None:
     rows = fetch_all("SELECT * FROM my_snapshot ORDER BY captured_at DESC LIMIT 1")
+    return rows[0] if rows else None
+
+
+def replace_meta_builds(league: str, builds: list[MetaBuild]) -> int:
+    """Replace this league's meta builds with a fresh batch (idempotent daily re-aggregate,
+    mirroring replace_craft_methods)."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM meta_build WHERE league = %s", (league,))
+            cur.executemany(
+                """INSERT INTO meta_build (league, char_class, sample_size, gems, sources)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                [
+                    (
+                        b.league, b.char_class, b.sample_size,
+                        json.dumps(b.gems), json.dumps(b.sources),
+                    )
+                    for b in builds
+                ],
+            )
+        conn.commit()
+    return len(builds)
+
+
+def latest_meta_build(league: str, char_class: str) -> dict[str, Any] | None:
+    """Newest meta build for a league + class, for the /build diff. None when none collected yet
+    (the diff then degrades gracefully)."""
+    rows = fetch_all(
+        """SELECT char_class, sample_size, gems, sources, captured_at
+           FROM meta_build WHERE league = %s AND char_class = %s
+           ORDER BY captured_at DESC LIMIT 1""",
+        (league, char_class),
+    )
     return rows[0] if rows else None
 
 
