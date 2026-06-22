@@ -37,3 +37,6 @@ Thumbs.db
 # Editor
 .idea/
 *.swp
+
+# TypeScript incremental build cache (build artifact)
+web/*.tsbuildinfo
