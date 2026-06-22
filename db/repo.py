@@ -95,12 +95,18 @@ def upsert_knowledge_chunk(chunk: KnowledgeChunk) -> None:
 
 # ── reads ───────────────────────────────────────────────────────────────────────
 
-def latest_prices(league: str, limit: int = 500) -> list[dict[str, Any]]:
+def latest_prices(league: str, limit: int = 1000) -> list[dict[str, Any]]:
+    """Latest snapshot per (name, item_type). DISTINCT ON forces an alphabetical ORDER BY, so the
+    dedup runs in a subquery and the outer LIMIT keeps the most VALUABLE items (not the
+    alphabetically-first ones) when the set exceeds the cap."""
     return fetch_all(
-        """SELECT DISTINCT ON (name, item_type) name, item_type, chaos_value, divine_value,
-                  listing_count, captured_at
-           FROM price_snapshot WHERE league = %s
-           ORDER BY name, item_type, captured_at DESC
+        """SELECT * FROM (
+               SELECT DISTINCT ON (name, item_type) name, item_type, chaos_value, divine_value,
+                      listing_count, captured_at
+               FROM price_snapshot WHERE league = %s
+               ORDER BY name, item_type, captured_at DESC
+           ) t
+           ORDER BY COALESCE(divine_value, chaos_value) DESC NULLS LAST
            LIMIT %s""",
         (league, limit),
     )
