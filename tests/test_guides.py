@@ -32,6 +32,13 @@ def test_to_rows_sorts_and_clamps():
     assert rows[1]["atlas"] == ""  # missing atlas defaults to empty
 
 
+def test_parse_salvages_truncated_response():
+    # second guide cut off mid-object — the complete first guide must still come through
+    truncated = '{"guides":[{"name":"A","steps":["x"]},{"name":"B","prof'
+    resp = parse_guides_json(truncated)
+    assert [g.name for g in resp.guides] == ["A"]
+
+
 def test_parse_rejects_garbage():
     with pytest.raises(ValueError):
         parse_guides_json("not json")
