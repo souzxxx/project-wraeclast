@@ -10,26 +10,20 @@ _448 priced items tracked today. All profit/hour figures are estimates._
 
 ## Top farms by profit/hour
 
-1. **Spear & Weapon Crafting** — ~60 chaos/h (risk: high, invest: 75)
-   - Crafting de armas endgame (Spears, Quarterstaves, Wands) tem o maior teto de lucro do jogo. ASaVeQ relata 1.000 divines em um dia com spear crafting. O processo envolve base selection, Essence crafting para mods garantidos, Exalt/Annul com Omens para controle, e Desecration para o mod final. Armas BiS vendem por 30-200+ divines. Estratégia de altíssimo risco e altíssimo retorno.
-2. **+3/+5 Amulet Crafting** — ~50 chaos/h (risk: high, invest: 75)
-   - Crafting de amuletos +3/+5 Melee ou Spell Skills é uma das estratégias mais lucrativas do jogo. O processo usa Essence para garantir um mod, depois Omens para controlar prefixos/suffixes, Exalts para preencher, e Desecration para finalizar. Amuletos premium vendem por 20-100+ divines. ASaVeQ e Diztoh mostram resultados excelentes. Alto risco devido ao RNG, mas o teto de lucro é massivo.
-3. **Tablet Rolling (Abyss & Breach)** — ~40 chaos/h (risk: med, invest: 10)
-   - Rerollar Precursor Tablets na hideout é uma estratégia puramente de economia sem necessidade de mapear. Compras tablets baratas, usa Orb of Chance ou Chaos para rerollar mods valiosos (ex: 3x Omen, mods de quantidade), e vende por 5-40 divines. XTheFarmerX reporta até 45 divines/hora. Risco moderado pois depende de RNG, mas o piso de lucro é alto devido à demanda constante.
-4. **Boot & ES Helmet Crafting** — ~40 chaos/h (risk: high, invest: 75)
-   - Crafting de botas com mods de Charge e capacetes ES é extremamente lucrativo. ASaVeQ relata 600-700 divines de lucro. O método usa Fracture em um mod desejado, Essence para o segundo mod, e Omens/Annulments para refinar. Botas com Chance to Not Remove Charges vendem por 10-50+ divines. Requer conhecimento de crafting e capital inicial, mas o ROI é excelente.
-5. **Time-Lost Jewel Crafting** — ~35 chaos/h (risk: med, invest: 2)
-   - Crafting de Time-Lost Jewels de 5 mods usando Ancient Potent Liquid Contempt (2.29 divine) para tentar +1 suffix. Compra jewels com 2 suffixes desejados, garante 4 mods, e aplica Contempt para 50% de chance de +1 suffix. Jewels de 5 mods top-tier vendem por 10-50+ divines. Risco moderado (50/50 no Contempt), mas lucro consistente quando acerta.
-6. **Abyss Farming** — ~30 chaos/h (risk: med, invest: 1)
-   - Abyss continua sendo uma das estratégias mais consistentes e lucrativas do atlas. Os materiais de Abyss — Collarbones, Jawbones e Ribs — têm valores altíssimos (1-2.5 divine cada), e com a árvore de atlas otimizada você consegue múltiplos slots de Abyss por mapa. Fubgun reporta 30 divines de lucro por mapa. Requer tablets de Abyss com mods de quantidade e mapa compacto para clear rápido.
-7. **Ring Crafting with Catalysts** — ~30 chaos/h (risk: med, invest: 75)
-   - Crafting de anéis endgame usando a técnica de Catalysing para garantir mods específicos de resist ou damage. Com Essences para um mod garantido, Catalysts para modificar pesos, e Omens para controle de prefix/suffix. Anéis BiS vendem por 10-40+ divines. XTheFarmerX detalha a técnica completa com exemplos de lucro. Risco moderado, investimento acessível.
-8. **Ritual Omen Farming** — ~25 chaos/h (risk: low, invest: n/a)
-   - Ritual farm focado em coletar Omens via defer de recompensas. A estratégia consiste em maximizar Tribute, defer itens caros como Kalandra's Touch, Dextral Erasures e Omens em estágios, e coletar em massa. Guias da comunidade reportam 20-30 divines/hora consistentemente. É uma das estratégias mais acessíveis com baixo investimento inicial e risco baixo.
-9. **Boss Rush Farming** — ~22 chaos/h (risk: low, invest: n/a)
-   - Boss Rush consiste em focar exclusivamente em derrotar bosses rapidamente, pulando o resto do mapa. Com a árvore de atlas focada em boss loot, você acumula divines, fragments e Breachstones (0.25 divine cada) de King in the Mist, Matriarch/Patriarch e Breach bosses. Clear time muito baixo (~3 min/mapa) e investimento mínimo. Consistente mas depende de boa build single-target.
-10. **Delirium Mirror Farming** — ~18 chaos/h (risk: med, invest: n/a)
-   - Delirium farming foca em Grand Mirrors e liquids valiosos. Ancient Potent Liquid Contempt vale 2.29 divine, Concentrated Liquid Isolation vale 0.71 divine. A estratégia corrige problemas de progressão do atlas ao priorizar biomas corretos. Clear time é mais longo (~8 min) devido ao Delirium orb adicionando dificuldade, mas o loot por mapa compensa.
+1. **Tablet Rolling / Chancing (Hideout)** — ~35 chaos/h (risk: med, invest: n/a)
+   - Rolar tablets (especialmente de Abyss e Breach) no hideout é uma das estratégias mais populares e rentáveis do momento. Tablets bem rolados podem valer de 10 a 40 divines cada. A estratégia envolve comprar tablets baratos, usar Chaos Orbs ou Chance Orbs para buscar mods de quantidade de monstros e mecânicas específicas. Vascor e XTheFarmerX relatam lucros excepcionais com risco relativamente baixo, pois mesmo rolls medianos recuperam o investimento.
+2. **Abyss Farming (Atlas)** — ~32 chaos/h (risk: low, invest: n/a)
+   - Abyss é atualmente a estratégia de farm mais consistente e popular no PoE2 0.5. Com tablets de Abyss priorizando.mods de quantidade de monstros e bioma de Caverna, você acumula Ancient Collarbones, Altered Collarbones e Ancient Jawbones que valem entre 2.3-2.4 divines cada. A estratégia exige pouco investimento inicial e oferece lucro garantido por mapa, sem depender de RNG extremo. Fubgun relata 30+ divines por mapa com a build otimizada.
+3. **Ritual Farming (Atlas)** — ~28 chaos/h (risk: med, invest: n/a)
+   - Ritual continua como uma das estratégias mais lucrativas no patch 0.5, gerando 25-32 divines por hora. A mecânica de defer (adiar) itens caros permite acumular recompensas valiosas como Omens e An Audience with the King ao longo de vários mapas. Funciona melhor em mapas urbanos com tablets de Ritual modificados para Rite of the Nameless. Requer gestão cuidadosa de tribute e conhecimento de quais itens deferir.
+4. **Profit Crafting — ES Helmets / Boots** — ~25 chaos/h (risk: high, invest: n/a)
+   - Craft de rentabilidade focado em capacetes de ES e botas com mods de charges. Usa bases ilvl 75+, Essence crafting para mods garantidos, Orb of Annulment para limpar mods indesejados, e Desecration para finalizar. ASaVeQ relata 600-700 divines em um dia com essa estratégia. É uma abordagem de alto risco e alta recompensa que exige conhecimento profundo do sistema de crafting e acesso a bases de qualidade.
+5. **Boss Rush Farming (Atlas)** — ~20 chaos/h (risk: med, invest: n/a)
+   - Boss Rush foca em completar mapas rapidamente priorizando chefes de Breach, King in the Mist e Matriarch/Patriarch Halls. A estratégia depende de mapas rápidos (3-4 min) e builds com alto single-target DPS. Breachstones valem 0.32 divines cada e dropam com frequência em mapas de Breach com tablets apropriados. O lucro é estável mas requer build bem otimizada para clear rápido.
+6. **Delirium Tablet Farming (Atlas)** — ~15 chaos/h (risk: med, invest: n/a)
+   - Farm de Delirium com tablets otimizados pode gerar 10-20 divines por hora, com Ancient Potent Liquid Contempt (2.33d) e Concentrated Liquid Isolation (0.60d) como principais fontes de lucro. A estratégia de CuteDog_ foca em Delirium Tablets com mods específicos para maximizar drops de líquidos valiosos. Resultados podem variar bastante — Perra Gaming reportou resultados inconsistentes após 100 mapas.
+7. **Trial of Sekhemas / Chaos Farm (Service)** — ~15 chaos/h (risk: low, invest: n/a)
+   - Trial farming no endgame oferece lucro garantido e consistente com baixíssimo investimento, ideal para jogadores casuais. POEGuy descreve a estratégia como lucro garantido a cada run, sem a variância de estratégias como Ritual. Funciona recrutando outros jogadores para serviços de Trial completion e vendendo relics/loot. Excelente ponto de partida para acumular capital inicial antes de migrar para estratégias de maior investimento.
 
 ## My build
 
