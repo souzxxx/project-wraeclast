@@ -53,13 +53,15 @@ def normalize_exchange(
     by_id = {it.get("id"): it for it in items if isinstance(it, dict)}
 
     out: list[PriceSnapshot] = []
+    seen: set[str] = set()
     for idx, line in enumerate(lines):
         if not isinstance(line, dict):
             continue
         item = by_id.get(line.get("id")) or (items[idx] if idx < len(items) else {})
         name = (item or {}).get("name")
-        if not name:
+        if not name or name in seen:  # one row per name per run (no intra-run duplicates)
             continue
+        seen.add(name)
         value = _num(line.get("primaryValue"))
         # core.primary is the base unit; for PoE2 it's typically "divine".
         divine_value = value if primary == "divine" else None

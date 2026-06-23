@@ -20,6 +20,7 @@ def render_report(
     farms: list[dict[str, Any]],
     my_snapshot: dict[str, Any] | None,
     price_count: int,
+    craft_methods: list[dict[str, Any]] | None = None,
     today: date | None = None,
 ) -> str:
     today = today or date.today()
@@ -40,13 +41,28 @@ def render_report(
     if farms:
         for i, f in enumerate(farms, 1):
             lines.append(
-                f"{i}. **{f['name']}** — ~{f.get('est_profit_per_hour')} chaos/h "
+                f"{i}. **{f['name']}** — ~{f.get('est_profit_per_hour')} div/h "
                 f"(risk: {f.get('risk') or 'n/a'}, invest: {f.get('investment_required') or 'n/a'})"
             )
             if f.get("summary"):
                 lines.append(f"   - {f['summary']}")
     else:
         lines.append("_No farm strategies curated yet._")
+
+    lines += ["", "## Top crafts by ROI", ""]
+    if craft_methods:
+        for i, m in enumerate(craft_methods, 1):
+            mech = ", ".join(m.get("mechanics") or []) or "craft"
+            if m.get("priced") and m.get("roi_pct") is not None:
+                lines.append(
+                    f"{i}. **{m.get('name')}** [{mech}] — ROI ~{m.get('roi_pct')}%, "
+                    f"~{m.get('expected_cost_div')} div cost (success {m.get('success_prob')})"
+                )
+            else:
+                miss = ", ".join(m.get("missing_prices") or []) or "n/a"
+                lines.append(f"{i}. **{m.get('name')}** [{mech}] — cost not yet priceable ({miss})")
+    else:
+        lines.append("_No craft methods yet._")
 
     lines += ["", "## My build", ""]
     if my_snapshot:
@@ -66,15 +82,23 @@ def render_report(
 
 
 def run() -> str:
-    from db.repo import latest_farm_strategies, latest_my_snapshot, latest_prices
+    from api.craft_ev import rank_methods
+    from db.repo import (
+        latest_craft_methods,
+        latest_farm_strategies,
+        latest_my_snapshot,
+        latest_prices,
+    )
 
     settings = get_settings()
     league = settings.poe2_league
+    prices = latest_prices(league, limit=1000)
     report = render_report(
         league=league,
         farms=latest_farm_strategies(league, limit=10),
         my_snapshot=latest_my_snapshot(),
-        price_count=len(latest_prices(league, limit=1000)),
+        price_count=len(prices),
+        craft_methods=rank_methods(latest_craft_methods(league), prices)[:8],
     )
     vault = Path(settings.obsidian_vault_dir)
     vault.mkdir(parents=True, exist_ok=True)

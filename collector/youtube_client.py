@@ -94,11 +94,16 @@ async def fetch_youtube(settings: Settings | None = None) -> list[KnowledgeDoc]:
         docs: list[KnowledgeDoc] = []
         for i in range(0, len(all_ids), 50):  # videos.list accepts up to 50 ids
             batch = all_ids[i : i + 50]
-            data = await http.get_json(
-                VIDEOS_URL,
-                params={"key": settings.youtube_api_key, "part": "snippet", "id": ",".join(batch)},
-                cache_ttl=3600,
-            )
+            try:
+                data = await http.get_json(
+                    VIDEOS_URL,
+                    params={
+                        "key": settings.youtube_api_key, "part": "snippet", "id": ",".join(batch)
+                    },
+                    cache_ttl=3600,
+                )
+            except Exception:  # noqa: BLE001 — one bad batch shouldn't drop the rest
+                continue
             docs += videos_to_docs(data)
     return docs
 

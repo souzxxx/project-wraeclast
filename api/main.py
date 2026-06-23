@@ -43,6 +43,16 @@ async def _on_unhandled(request: Request, exc: Exception) -> JSONResponse:
         resp.headers["Vary"] = "Origin"
     return resp
 
+
+@app.middleware("http")
+async def _cache_reads(request: Request, call_next: Any) -> Any:
+    """The data refreshes once a day, so let browsers/CDN cache successful GETs briefly — cuts
+    repeat DB load on /state, /prices, /farm, /craft/*, etc. (POST /chat + /ingest untouched)."""
+    resp = await call_next(request)
+    if request.method == "GET" and resp.status_code == 200:
+        resp.headers.setdefault("Cache-Control", "public, max-age=300")
+    return resp
+
 app.include_router(farm.router)
 app.include_router(build.router)
 app.include_router(chat.router)
