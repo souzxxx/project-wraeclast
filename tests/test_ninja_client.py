@@ -47,6 +47,16 @@ def test_normalize_exchange_chaos_primary():
     assert rows[0].divine_value is None
 
 
+def test_normalize_exchange_dedupes_names_within_a_run():
+    payload = {
+        "core": {"primary": "divine"},
+        "lines": [{"id": "a", "primaryValue": 1}, {"id": "b", "primaryValue": 2}],
+        "items": [{"id": "a", "name": "Dup"}, {"id": "b", "name": "Dup"}],  # same name twice
+    }
+    rows = normalize_exchange(payload, "L")
+    assert [r.name for r in rows] == ["Dup"]  # one row per name
+
+
 def test_normalize_exchange_tags_custom_item_type():
     # the same parser serves every craft-surface category — it just gets a different item_type
     rows = normalize_exchange(SAMPLE, "L", item_type="essence")

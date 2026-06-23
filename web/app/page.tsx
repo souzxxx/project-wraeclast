@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API } from "./lib";
 
 type Farm = {
   name: string;
@@ -55,7 +54,7 @@ export default function Home() {
           {!state && !stateErr && <p className="meta">Carregando…</p>}
           {state?.top_farms?.length ? (
             state.top_farms.map((f, i) => (
-              <div className="farm" key={i}>
+              <div className="farm" key={`${f.name}-${i}`}>
                 <div className="name">
                   {i + 1}. {f.name} {f.risk && <span className="tag">{f.risk}</span>}
                 </div>

@@ -164,7 +164,7 @@ function CraftRanking() {
                 <div className="ev-rank">{i + 1}</div>
                 <div className="ev-main">
                   <div className="ev-name">{m.name}</div>
-                  <div className="meta">→ {m.output}</div>
+                  {m.output && <div className="meta">→ {m.output}</div>}
                   <Mechs list={m.mechanics} />
                 </div>
                 <div className="ev-econ">

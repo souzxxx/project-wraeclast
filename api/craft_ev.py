@@ -38,7 +38,9 @@ def price_index(prices: list[dict[str, Any]]) -> dict[str, float]:
         if value is None:
             value = _f(p.get("divine_value"))
         if name and value is not None:
-            index[name] = value
+            # first occurrence wins (prices are fetched Currency-first), so a name shared across
+            # mechanic categories resolves to its canonical currency price, not the last category's
+            index.setdefault(name, value)
     return index
 
 
