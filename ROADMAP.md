@@ -56,12 +56,23 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ## P3 — Tech debt / quality
 - [ ] Add tests for any module under 80% of its public surface.
+      _(in progress — `collector/ninja_build_client.py` 39% → 81%, see Done 2026-06-23.
+      Still under 80%: `db/repo.py`, `db/connection.py` (need a live DB),
+      `collector/llm.py`, `collector/youtube_client.py`, `collector/ninja_client.py`.)_
 - [ ] Tighten the YouTube queries based on which sources actually inform good guides.
 
 ---
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-23** — P3 coverage: harden `collector/ninja_build_client.py` (39% → 81% — clears
+  the 80% bar). Added offline tests for the previously-untested surface: `fetch_my_build`
+  (happy path + empty/non-list/HTTP-404 → `CharacterNotOnLadder`) mocked with `respx`; `run`
+  (ninja success, off-ladder-without-PoB → False, PoB-code fallback) with the DB write
+  monkeypatched; plus `_profile_endpoint`, `_int`, `from_pob_code` (garbage → `PoBParseError`),
+  the `pick_character` first-char fallback, defensive `normalize_profile_character`, and the
+  `_main` unknown-command path. No production code changed — tests only. +14 offline tests
+  (154 → 168), ruff clean. Remaining sub-80% modules noted under the open P3 item.
 - **2026-06-22** — `/build` meta source. New `collector/ninja_meta_client.py` aggregates
   poe.ninja's PoE2 builds ladder per character class: groups characters by class, counts each
   skill gem once per character, and keeps the most-used gems (≥`ninja_meta_min_usage`, capped,
