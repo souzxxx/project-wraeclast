@@ -56,15 +56,23 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ## P3 — Tech debt / quality
 - [ ] Add tests for any module under 80% of its public surface.
-      _(in progress — `collector/ninja_build_client.py` 39% → 81%, see Done 2026-06-23.
+      _(in progress — `collector/ninja_build_client.py` 39% → 81%, see Done 2026-06-23;
+      `collector/youtube_client.py` 46% → 99%, see Done 2026-06-24.
       Still under 80%: `db/repo.py`, `db/connection.py` (need a live DB),
-      `collector/llm.py`, `collector/youtube_client.py`, `collector/ninja_client.py`.)_
+      `collector/llm.py`, `collector/ninja_client.py`.)_
 - [ ] Tighten the YouTube queries based on which sources actually inform good guides.
 
 ---
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-24** — P3 coverage: harden `collector/youtube_client.py` (46% → 99% — clears the
+  80% bar). Added offline tests for the previously-untested async surface: `fetch_youtube`
+  (no-API-key short-circuit; cross-query id dedup keeping insertion order; a failing `search.list`
+  query swallowed without sinking the run; a failing `videos.list` batch dropped, not fatal; 60
+  ids batched 50 + 10) mocked with `respx`; `run` (ingest wiring, monkeypatched); `explore`; and
+  the `_main` run/explore/unknown-command dispatch. No production code changed — tests only.
+  +10 offline tests (168 → 178), ruff clean. Remaining sub-80% modules noted under the open P3 item.
 - **2026-06-23** — P3 coverage: harden `collector/ninja_build_client.py` (39% → 81% — clears
   the 80% bar). Added offline tests for the previously-untested surface: `fetch_my_build`
   (happy path + empty/non-list/HTTP-404 → `CharacterNotOnLadder`) mocked with `respx`; `run`
