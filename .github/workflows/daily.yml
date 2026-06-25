@@ -41,6 +41,10 @@ jobs:
           EMBEDDINGS_API_KEY: ${{ secrets.EMBEDDINGS_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           NINJA_ACCOUNT: ${{ secrets.NINJA_ACCOUNT }}
+          # Pin the tracked character (public name, not a secret). Without this the snapshot
+          # follows whatever char is "current" on the ninja profile and drifts when a new char
+          # is rolled. Change here to re-point it.
+          NINJA_CHARACTER: YukinariSugawara
           OBSIDIAN_VAULT_DIR: reports
         run: python -m collector.run_daily
       - name: Commit daily report
