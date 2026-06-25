@@ -57,15 +57,27 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 ## P3 — Tech debt / quality
 - [ ] Add tests for any module under 80% of its public surface.
       _(in progress — `collector/ninja_build_client.py` 39% → 81%, see Done 2026-06-23;
-      `collector/youtube_client.py` 46% → 99%, see Done 2026-06-24.
+      `collector/youtube_client.py` 46% → 99%, see Done 2026-06-24;
+      `collector/ninja_client.py` 51% → 99%, see Done 2026-06-25.
       Still under 80%: `db/repo.py`, `db/connection.py` (need a live DB),
-      `collector/llm.py`, `collector/ninja_client.py`.)_
+      `collector/llm.py`.)_
 - [ ] Tighten the YouTube queries based on which sources actually inform good guides.
 
 ---
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-25** — P3 coverage: harden `collector/ninja_client.py` (51% → 99% — clears the
+  80% bar). The economy collector is the heart of the project but only its pure
+  `normalize_exchange` + config parsing were tested; the network/dispatch surface was untested.
+  Added offline tests for: `_num` (happy path + TypeError/ValueError → None); `normalize_exchange`
+  edge branches (non-dict line skipped, unknown core base recorded under divine, positional
+  item fallback when no id match); `fetch_economy` (per-category GET + distinct `item_type`
+  tagging; one 500-ing category swallowed without sinking the rest) mocked with `respx`; `run`
+  (fetch + DB write wiring, monkeypatched); `explore` (dict sampled-to-2 + non-dict payload);
+  and the `_main` run/explore/default/unknown-command dispatch. No production code changed —
+  tests only. +12 offline tests (178 → 190), ruff clean. Only `db/repo.py`, `db/connection.py`
+  (need a live DB) and `collector/llm.py` remain sub-80%.
 - **2026-06-24** — P3 coverage: harden `collector/youtube_client.py` (46% → 99% — clears the
   80% bar). Added offline tests for the previously-untested async surface: `fetch_youtube`
   (no-API-key short-circuit; cross-query id dedup keeping insertion order; a failing `search.list`
