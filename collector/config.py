@@ -48,9 +48,9 @@ class Settings(BaseSettings):
     # (NOTE: "Mirage" is a PoE1 league; PoE2 uses 0.x versioning. Confirm via `explore`.)
     poe2_league: str = "Runes of Aldur"
     # Current game patch — used as a LABEL for generated guides so they don't claim a stale
-    # version. Bump via env when GGG ships a patch (live as of 2026-06-21: 0.5.3). Guide CONTENT
+    # version. Bump via env when GGG ships a patch (live as of 2026-06-26: 0.5.4). Guide CONTENT
     # is grounded in live data (EV-ranked methods + prices + corpus), not in this number.
-    poe2_patch: str = "0.5.3"
+    poe2_patch: str = "0.5.4"
     ninja_base_url: str = "https://poe.ninja"
     # PoE2 economy = the currency-exchange overview (confirmed live; classic /api/data 404s).
     ninja_economy_path: str = "/poe2/api/economy/exchange/0/overview"
