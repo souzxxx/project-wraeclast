@@ -57,8 +57,8 @@ def test_build_prompt_carries_patch_and_computed_numbers():
         "roi_pct": 300, "expected_cost_div": 5.0, "success_prob": 0.2, "steps": ["s1"],
         "missing_prices": [],
     }]
-    p = build_prompt(methods, [{"title": "T", "content": "c"}], "0.5.3", "Runes of Aldur")
-    assert "0.5.3" in p and "Runes of Aldur" in p
+    p = build_prompt(methods, [{"title": "T", "content": "c"}], "0.5.4", "Runes of Aldur")
+    assert "0.5.4" in p and "Runes of Aldur" in p
     assert "ROI ~300%" in p and "cost ~5.0 div" in p
 
 
@@ -68,7 +68,7 @@ def test_build_prompt_flags_unpriced_methods():
         "roi_pct": None, "expected_cost_div": None, "success_prob": 1.0, "steps": [],
         "missing_prices": ["Foo Rune"],
     }]
-    p = build_prompt(methods, [], "0.5.3", "L")
+    p = build_prompt(methods, [], "0.5.4", "L")
     assert "not yet priceable" in p and "Foo Rune" in p
 
 
