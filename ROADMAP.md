@@ -58,15 +58,27 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [ ] Add tests for any module under 80% of its public surface.
       _(in progress — `collector/ninja_build_client.py` 39% → 81%, see Done 2026-06-23;
       `collector/youtube_client.py` 46% → 99%, see Done 2026-06-24;
-      `collector/ninja_client.py` 51% → 99%, see Done 2026-06-25.
-      Still under 80%: `db/repo.py`, `db/connection.py` (need a live DB),
-      `collector/llm.py`.)_
+      `collector/ninja_client.py` 51% → 99%, see Done 2026-06-25;
+      `collector/llm.py` 25% → 100%, see Done 2026-06-26.
+      Still under 80%: `db/repo.py`, `db/connection.py` (need a live DB).)_
 - [ ] Tighten the YouTube queries based on which sources actually inform good guides.
 
 ---
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-26** — P3 coverage: harden `collector/llm.py` (25% → 100% — clears the 80% bar;
+  this was the last non-DB module under the line). The shared GLM (z.ai) chat helper was the
+  most-used LLM seam in the project (curate/guides/craft_guides/chat all route through it) yet
+  only its module import was covered — `_client` construction/guarding and the whole `glm_chat`
+  streaming body were untested. Added offline tests (no network, OpenAI client faked) for:
+  `_client` (RuntimeError when `GLM_API_KEY` unset; api_key/base_url/timeout passed through to
+  `OpenAI`); and `glm_chat` (assembles streamed deltas in order; skips chunks with no choices /
+  `None` delta / empty content; uses `glm_chat_model` + `glm_max_tokens` defaults with
+  `stream=True` and no `with_options`; honors model/temperature/max_tokens overrides; routes a
+  per-call `timeout` through `with_options(timeout=...)` while still issuing exactly one create).
+  No production code changed — tests only. +7 offline tests (190 → 197), ruff clean. Only
+  `db/repo.py` + `db/connection.py` (need a live DB) remain sub-80%.
 - **2026-06-25** — P3 coverage: harden `collector/ninja_client.py` (51% → 99% — clears the
   80% bar). The economy collector is the heart of the project but only its pure
   `normalize_exchange` + config parsing were tested; the network/dispatch surface was untested.
