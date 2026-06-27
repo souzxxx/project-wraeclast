@@ -55,18 +55,37 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       stash currency (net worth) and off-ladder characters. Scaffolding in `collector/ggg_client.py`.
 
 ## P3 — Tech debt / quality
-- [ ] Add tests for any module under 80% of its public surface.
-      _(in progress — `collector/ninja_build_client.py` 39% → 81%, see Done 2026-06-23;
+- [x] Add tests for any module under 80% of its public surface.
+      _(done — `collector/ninja_build_client.py` 39% → 81%, see Done 2026-06-23;
       `collector/youtube_client.py` 46% → 99%, see Done 2026-06-24;
       `collector/ninja_client.py` 51% → 99%, see Done 2026-06-25;
-      `collector/llm.py` 25% → 100%, see Done 2026-06-26.
-      Still under 80%: `db/repo.py`, `db/connection.py` (need a live DB).)_
+      `collector/llm.py` 25% → 100%, see Done 2026-06-26;
+      `db/repo.py` 30% → 100% and `db/connection.py` 33% → 98%, see Done 2026-06-27.
+      Every module now clears the 80% bar.)_
 - [ ] Tighten the YouTube queries based on which sources actually inform good guides.
 
 ---
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-27** — P3 coverage: harden the data layer — `db/repo.py` (30% → 100%) and
+  `db/connection.py` (33% → 98%; only the `__main__` guard line remains). These were the last
+  two modules under the 80% bar, so **every module in the project now clears it.** The note had
+  flagged them as "need a live DB", but both are pure SQL-dispatch: by faking the
+  connection/cursor (and `psycopg.connect` + `get_settings` for connection.py) the whole surface
+  is exercised offline — no network, no Neon. `test_db_connection.py` covers `get_connection`
+  (RuntimeError when `NEON_DATABASE_URL` unset; yields the conn + closes it in `finally`, even on
+  exception; `dict_row` row factory passed through), `fetch_all`/`execute` (query + params
+  dispatch, `None` → `()` default, commit), `ping` (True only on `{"ok": 1}`), `migrate` (applies
+  every `db/migrations/*.sql` in lexical order, one commit each — asserted against the real
+  migrations dir and a tmp dir), and the `_main` ping/migrate/default/unknown dispatch.
+  `test_db_repo.py` covers every write (empty-batch short-circuit with no connection opened;
+  JSON-encoding of list/dict columns; the pgvector text literal with and without an embedding;
+  the DELETE-then-`executemany` replace pattern, incl. the DELETE still firing on an empty batch;
+  `dict.get` defaults for the guide writers) and every read (league/limit/days binding, the
+  twice-bound league in `latest_farm_strategies`, first-row-or-None, the `topic`-clause branch in
+  `search_knowledge`). No production code changed — tests only. +48 offline tests (197 → 245),
+  ruff clean. **The 80%-coverage P3 item is now complete.**
 - **2026-06-26** — P3 coverage: harden `collector/llm.py` (25% → 100% — clears the 80% bar;
   this was the last non-DB module under the line). The shared GLM (z.ai) chat helper was the
   most-used LLM seam in the project (curate/guides/craft_guides/chat all route through it) yet
