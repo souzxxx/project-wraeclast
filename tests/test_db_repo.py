@@ -219,11 +219,13 @@ def test_insert_my_snapshot_json_encodes(monkeypatch):
 def test_upsert_knowledge_chunk_with_embedding(monkeypatch):
     calls = _patch_execute(monkeypatch)
     chunk = KnowledgeChunk(source_url="u", title="t", content="c",
-                           embedding=[0.1, 0.2], topic="craft")
+                           embedding=[0.1, 0.2], topic="craft", discovery_query="ritual farm")
     repo.upsert_knowledge_chunk(chunk)
     query, params = calls[0]
     assert "ON CONFLICT (source_url) DO UPDATE" in query
-    assert params == ("u", "t", "c", "[0.1,0.2]", "craft")
+    # discovery_query preserved on conflict (COALESCE keeps the first attribution)
+    assert "COALESCE(knowledge_chunk.discovery_query" in query
+    assert params == ("u", "t", "c", "[0.1,0.2]", "craft", "ritual farm")
 
 
 def test_upsert_knowledge_chunk_without_embedding(monkeypatch):
@@ -232,6 +234,16 @@ def test_upsert_knowledge_chunk_without_embedding(monkeypatch):
     repo.upsert_knowledge_chunk(chunk)
     _, params = calls[0]
     assert params[3] is None  # no vector literal when embedding is None
+    assert params[5] is None  # discovery_query defaults to None for non-query sources
+
+
+def test_knowledge_query_attribution_filters_null(monkeypatch):
+    calls = _patch_fetch(monkeypatch, [{"source_url": "u", "discovery_query": "q"}])
+    out = repo.knowledge_query_attribution()
+    assert out == [{"source_url": "u", "discovery_query": "q"}]
+    query, params = calls[0]
+    assert "discovery_query IS NOT NULL" in query
+    assert params is None  # no bound params
 
 
 # ── reads ────────────────────────────────────────────────────────────────────────

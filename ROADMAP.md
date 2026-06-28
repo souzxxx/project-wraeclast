@@ -62,12 +62,29 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       `collector/llm.py` 25% → 100%, see Done 2026-06-26;
       `db/repo.py` 30% → 100% and `db/connection.py` 33% → 98%, see Done 2026-06-27.
       Every module now clears the 80% bar.)_
-- [ ] Tighten the YouTube queries based on which sources actually inform good guides.
+- [x] Tighten the YouTube queries based on which sources actually inform good guides.
+      _(see Done — shipped the data-driven analyzer; the actual query edits are now a
+      report-driven decision instead of guesswork.)_
 
 ---
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-28** — P3: make YouTube-query tightening data-driven (the "which sources actually
+  inform good guides" item). Until now the only signal for pruning `youtube_queries` was a hunch;
+  there was no record of which query surfaced which video, nor whether that video ever fed a guide.
+  Added that signal end-to-end: migration `0009` adds `knowledge_chunk.discovery_query`;
+  `fetch_youtube` now attributes each deduped video to the FIRST query that surfaced it (no
+  double-counting across queries); `KnowledgeDoc`/`ingest_documents`/`KnowledgeChunk`/
+  `upsert_knowledge_chunk` thread it through, and the upsert `COALESCE`s so a re-found chunk keeps
+  its original attribution. New pure analyzer `collector/query_stats.py` crosses that attribution
+  with the URLs cited across `farm_guide`/`craft_guide`/`farm_strategy` → per-query
+  `discovered`/`cited`/`citation_rate`, flags configured-but-uncited queries as **drop candidates**,
+  and surfaces drift (queries only in history after a config edit). `python -m collector.query_stats`
+  renders the markdown report the owner uses to tighten the config. All changes additive; migrations
+  apply before collection in `daily.yml`, so the live path stays safe. +16 offline tests
+  (245 → 261), ruff clean. (Actual config edits await a few days of attributed data — the analyzer
+  is the deliverable that makes that decision evidence-based.)
 - **2026-06-27** — P3 coverage: harden the data layer — `db/repo.py` (30% → 100%) and
   `db/connection.py` (33% → 98%; only the `__main__` guard line remains). These were the last
   two modules under the 80% bar, so **every module in the project now clears it.** The note had

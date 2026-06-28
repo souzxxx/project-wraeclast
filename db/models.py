@@ -72,6 +72,9 @@ class KnowledgeChunk(BaseModel):
     content: str
     embedding: list[float] | None = None
     topic: str | None = None  # craft | farm — coarse lane for RAG/chat filtering
+    # The search query (e.g. a YouTube query) that first surfaced this chunk, for query-productivity
+    # tuning (collector.query_stats). None for manual/RSS chunks with no originating query.
+    discovery_query: str | None = None
 
 
 class CraftMethod(BaseModel):

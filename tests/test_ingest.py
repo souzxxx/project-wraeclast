@@ -17,6 +17,23 @@ def test_empty_batch_returns_zero():
     assert ingest_documents([]) == 0
 
 
+def test_ingest_passes_discovery_query_through(monkeypatch):
+    import collector.ingest as ing
+
+    saved = []
+    monkeypatch.setattr(ing, "embed_texts", lambda texts: [[0.0] for _ in texts])
+    monkeypatch.setattr(ing, "upsert_knowledge_chunk", lambda chunk: saved.append(chunk))
+
+    ingest_documents([
+        KnowledgeDoc(source_url="u1", title="t", content="c", discovery_query="ritual farm"),
+        KnowledgeDoc(source_url="u2", title="t", content="c"),  # no query (e.g. RSS)
+    ])
+
+    by_url = {c.source_url: c for c in saved}
+    assert by_url["u1"].discovery_query == "ritual farm"
+    assert by_url["u2"].discovery_query is None
+
+
 def test_embed_texts_batches_and_preserves_order(monkeypatch):
     import collector.ingest as ing
 

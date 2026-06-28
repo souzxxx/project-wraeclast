@@ -81,15 +81,21 @@ def upsert_knowledge_chunk(chunk: KnowledgeChunk) -> None:
     """Dedup by source_url (see skill §3). Re-running a day refreshes content/embedding."""
     embedding = _vec_literal(chunk.embedding) if chunk.embedding is not None else None
     execute(
-        """INSERT INTO knowledge_chunk (source_url, title, content, embedding, topic)
-           VALUES (%s, %s, %s, %s, %s)
+        """INSERT INTO knowledge_chunk
+               (source_url, title, content, embedding, topic, discovery_query)
+           VALUES (%s, %s, %s, %s, %s, %s)
            ON CONFLICT (source_url) DO UPDATE
              SET title = EXCLUDED.title,
                  content = EXCLUDED.content,
                  embedding = EXCLUDED.embedding,
                  topic = EXCLUDED.topic,
+                 -- keep the FIRST query that surfaced a chunk (a later run / different source
+                 -- shouldn't rewrite attribution); only fill it when previously unknown.
+                 discovery_query =
+                     COALESCE(knowledge_chunk.discovery_query, EXCLUDED.discovery_query),
                  captured_at = now()""",
-        (chunk.source_url, chunk.title, chunk.content, embedding, chunk.topic),
+        (chunk.source_url, chunk.title, chunk.content, embedding, chunk.topic,
+         chunk.discovery_query),
     )
 
 
@@ -329,6 +335,15 @@ def knowledge_chunks_since(days: int = 2) -> list[dict[str, Any]]:
            WHERE captured_at >= now() - make_interval(days => %s)
            ORDER BY captured_at DESC""",
         (days,),
+    )
+
+
+def knowledge_query_attribution() -> list[dict[str, Any]]:
+    """Every chunk with its originating query, for the query-productivity analyzer
+    (collector.query_stats). Chunks with no `discovery_query` (manual/RSS) are excluded."""
+    return fetch_all(
+        """SELECT source_url, title, discovery_query FROM knowledge_chunk
+           WHERE discovery_query IS NOT NULL"""
     )
 
 
