@@ -237,13 +237,16 @@ def test_upsert_knowledge_chunk_without_embedding(monkeypatch):
     assert params[5] is None  # discovery_query defaults to None for non-query sources
 
 
-def test_knowledge_query_attribution_filters_null(monkeypatch):
+def test_knowledge_query_attribution_filters_null_and_scopes_to_recent_window(monkeypatch):
     calls = _patch_fetch(monkeypatch, [{"source_url": "u", "discovery_query": "q"}])
-    out = repo.knowledge_query_attribution()
+    out = repo.knowledge_query_attribution(limit=60)
     assert out == [{"source_url": "u", "discovery_query": "q"}]
     query, params = calls[0]
     assert "discovery_query IS NOT NULL" in query
-    assert params is None  # no bound params
+    # only the most-recent N chunks could ever be fed to a generator -> only they can be cited
+    assert "ORDER BY captured_at DESC" in query
+    assert "LIMIT" in query
+    assert params == (60,)
 
 
 # ── reads ────────────────────────────────────────────────────────────────────────

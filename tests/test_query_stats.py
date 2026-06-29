@@ -114,6 +114,8 @@ def test_build_report_wires_live_reads(monkeypatch):
         youtube_queries="alpha,beta", poe2_league="L"
     ))
 
+    captured: dict = {}
+
     class _Repo:
         @staticmethod
         def latest_farm_guides(league):
@@ -129,7 +131,8 @@ def test_build_report_wires_live_reads(monkeypatch):
             return [{"sources": [{"url": "u3"}]}]
 
         @staticmethod
-        def knowledge_query_attribution():
+        def knowledge_query_attribution(limit=None):
+            captured["limit"] = limit
             return [
                 {"source_url": "u1", "discovery_query": "alpha"},
                 {"source_url": "x", "discovery_query": "beta"},
@@ -143,6 +146,8 @@ def test_build_report_wires_live_reads(monkeypatch):
     out = build_report()
     assert "alpha" in out and "beta" in out
     assert "⚠️ drop candidate" in out  # beta discovered "x", never cited
+    # attribution is scoped to the recent fed window, not the whole history
+    assert captured["limit"] == qs._ATTRIBUTION_WINDOW
 
 
 def test_main_run_dispatches(monkeypatch, capsys):

@@ -21,13 +21,18 @@ from typing import Any
 
 from pydantic import BaseModel
 
+# Score only the most-recent N chunks: a chunk can be cited only if a generator fed it, and the
+# broadest generator window is curate's 60 most-recent chunks. Scoring older chunks would inflate
+# the denominator with chunks that never had a chance to be cited (see issue #28).
+_ATTRIBUTION_WINDOW = 60
+
 
 class QueryStat(BaseModel):
-    """Productivity of a single search query over the accumulated corpus."""
+    """Productivity of a single search query over the recent (fed) corpus window."""
 
     query: str
     configured: bool  # still present in the current YOUTUBE_QUERIES config
-    discovered: int  # chunks this query first surfaced
+    discovered: int  # chunks this query first surfaced (within the scored window)
     cited: int  # of those, how many are cited in a guide/strategy
     citation_rate: float  # cited / discovered (0.0 when nothing discovered)
     drop_candidate: bool  # configured but earning no citations — a tightening candidate
@@ -136,7 +141,9 @@ def build_report() -> str:
         *[s.get("sources", []) for s in repo.latest_farm_strategies(settings.poe2_league)],
     )
     stats = score_queries(
-        settings.youtube_query_list, repo.knowledge_query_attribution(), cited
+        settings.youtube_query_list,
+        repo.knowledge_query_attribution(limit=_ATTRIBUTION_WINDOW),
+        cited,
     )
     return render_report(stats)
 

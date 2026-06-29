@@ -338,12 +338,21 @@ def knowledge_chunks_since(days: int = 2) -> list[dict[str, Any]]:
     )
 
 
-def knowledge_query_attribution() -> list[dict[str, Any]]:
-    """Every chunk with its originating query, for the query-productivity analyzer
-    (collector.query_stats). Chunks with no `discovery_query` (manual/RSS) are excluded."""
+def knowledge_query_attribution(limit: int = 60) -> list[dict[str, Any]]:
+    """Attributed chunks for the query-productivity analyzer (collector.query_stats), scoped to the
+    `limit` most-recent chunks. A chunk can only be CITED if a generator fed it, and the generators
+    feed only the most-recent chunks (ORDER BY captured_at DESC LIMIT n); scoring older chunks would
+    inflate the denominator with chunks that never had a chance to be cited. Chunks with no
+    `discovery_query` (manual/RSS) are excluded."""
     return fetch_all(
-        """SELECT source_url, title, discovery_query FROM knowledge_chunk
-           WHERE discovery_query IS NOT NULL"""
+        """SELECT source_url, title, discovery_query FROM (
+               SELECT source_url, title, discovery_query
+               FROM knowledge_chunk
+               ORDER BY captured_at DESC
+               LIMIT %s
+           ) recent
+           WHERE discovery_query IS NOT NULL""",
+        (limit,),
     )
 
 
