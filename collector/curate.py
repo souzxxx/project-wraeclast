@@ -15,7 +15,11 @@ from pydantic import BaseModel, ValidationError, field_validator
 
 from collector.config import get_settings
 from collector.llm import glm_chat
+from collector.source_refs import number_knowledge, resolve_source_refs
 from db.models import FarmStrategy
+
+_K_MAX = 40  # knowledge entries fed to the model
+_K_CHARS = 600  # chars of each entry's content
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -66,6 +70,9 @@ class _LLMStrategy(BaseModel):
     risk: str | None = None
     summary: str = ""
     sources: list[dict[str, Any]] = []
+    # 1-based numbers of the COMMUNITY KNOWLEDGE entries the model used; resolved to real chunk URLs
+    # in to_farm_strategies (source_refs.resolve_source_refs). Raw here; resolution does coercion.
+    source_refs: list[Any] = []
 
     @field_validator(
         "expected_drops_per_map", "unit_price_chaos", "clear_time_minutes", "entry_cost_chaos",
@@ -98,6 +105,11 @@ class _LLMStrategy(BaseModel):
                 out.append({"url": x})
         return out
 
+    @field_validator("source_refs", mode="before")
+    @classmethod
+    def _source_refs(cls, v: Any) -> list[Any]:
+        return v if isinstance(v, list) else []
+
 
 class _LLMResponse(BaseModel):
     strategies: list[_LLMStrategy]
@@ -112,7 +124,10 @@ _SYSTEM = (
     "in divine, clear_time_minutes, entry_cost) when you can. Output STRICT JSON only — no "
     'markdown, no prose outside the JSON. Schema: {"strategies":[{"name","est_profit_per_hour",'
     '"expected_drops_per_map","unit_price_chaos","clear_time_minutes","entry_cost_chaos",'
-    '"investment_required","risk":"low|med|high","summary","sources":[{"url","title"}]}]}. '
+    '"investment_required","risk":"low|med|high","summary","source_refs":[números das fontes '
+    'usadas]}]}. '
+    "The COMMUNITY KNOWLEDGE entries are numbered [1], [2], …; in `source_refs` list only the "
+    "numbers of the entries that actually grounded each strategy (e.g. [1,4]). "
     "Write the `summary` value in BRAZILIAN PORTUGUESE (pt-BR); keep JSON keys in English and "
     "item/skill proper nouns in their in-game form. Everything is an ESTIMATE."
 )
@@ -129,13 +144,10 @@ def build_user_prompt(knowledge: list[dict[str, Any]], prices: list[dict[str, An
         for p in prices[:120]
         if _price_value(p) is not None
     ]
-    knowledge_lines = [
-        f"- {k.get('title') or k.get('source_url')}: {(k.get('content') or '')[:600]}"
-        for k in knowledge[:40]
-    ]
+    numbered, _ = number_knowledge(knowledge[:_K_MAX], _K_CHARS)
     return (
         "CURRENT PRICES (chaos):\n" + "\n".join(price_lines)
-        + "\n\nCOMMUNITY KNOWLEDGE (qualitative):\n" + "\n".join(knowledge_lines)
+        + "\n\nCOMMUNITY KNOWLEDGE (qualitative):\n" + numbered
         + "\n\nReturn the top farm strategies as strict JSON."
     )
 
@@ -163,7 +175,10 @@ def parse_llm_json(text: str) -> _LLMResponse:
         raise ValueError(f"LLM JSON failed schema validation: {exc}") from exc
 
 
-def to_farm_strategies(resp: _LLMResponse, league: str) -> list[FarmStrategy]:
+def to_farm_strategies(
+    resp: _LLMResponse, league: str, ref_map: list[dict[str, str]] | None = None
+) -> list[FarmStrategy]:
+    ref_map = ref_map or []
     out: list[FarmStrategy] = []
     for s in resp.strategies:
         # Golden rule (CLAUDE.md): publish the CALCULATED profit/hour when the model supplied real
@@ -177,6 +192,9 @@ def to_farm_strategies(resp: _LLMResponse, league: str) -> list[FarmStrategy]:
         )
         pph = formula if (has_components and formula > 0) else (s.est_profit_per_hour or 0.0)
         pph = max(pph, 0.0)
+        # Prefer real chunk URLs resolved from the model's numeric citations; fall back to whatever
+        # the model put in `sources` only when it gave no usable refs (keeps display non-empty).
+        sources = resolve_source_refs(s.source_refs, ref_map) or s.sources
         out.append(
             FarmStrategy(
                 league=league,
@@ -185,7 +203,7 @@ def to_farm_strategies(resp: _LLMResponse, league: str) -> list[FarmStrategy]:
                 investment_required=s.investment_required,
                 risk=s.risk,
                 summary=s.summary,
-                sources=s.sources,
+                sources=sources,
             )
         )
     out.sort(key=lambda x: x.est_profit_per_hour or 0, reverse=True)
@@ -208,6 +226,7 @@ def curate(
     knowledge: list[dict[str, Any]], prices: list[dict[str, Any]], league: str
 ) -> tuple[list[FarmStrategy], str]:
     settings = get_settings()
+    _, ref_map = number_knowledge(knowledge[:_K_MAX], _K_CHARS)
     text = glm_chat(
         [
             {"role": "system", "content": _SYSTEM},
@@ -217,7 +236,7 @@ def curate(
         temperature=0.3,
     )
     parsed = parse_llm_json(text)
-    strategies = to_farm_strategies(parsed, league)
+    strategies = to_farm_strategies(parsed, league, ref_map)
     return strategies, to_markdown(strategies, league)
 
 
