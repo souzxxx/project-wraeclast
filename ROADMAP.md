@@ -60,8 +60,12 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       `collector/youtube_client.py` 46% → 99%, see Done 2026-06-24;
       `collector/ninja_client.py` 51% → 99%, see Done 2026-06-25;
       `collector/llm.py` 25% → 100%, see Done 2026-06-26;
-      `db/repo.py` 30% → 100% and `db/connection.py` 33% → 98%, see Done 2026-06-27.
-      Every module now clears the 80% bar.)_
+      `db/repo.py` 30% → 100% and `db/connection.py` 33% → 98%, see Done 2026-06-27;
+      `collector/ninja_meta_client.py` 68% → 99%, see Done 2026-06-29.
+      Every pure/collector module now clears the 80% bar. Still sub-80% by design:
+      route/wiring modules (`api/routes/*`, `api/main.py`, `collector/run_daily.py`,
+      `scripts/export_obsidian.py`) that are integration glue needing the live app, and
+      `collector/ggg_client.py` (dormant Phase 2 OAuth, not in the daily path).)_
 - [x] Tighten the YouTube queries based on which sources actually inform good guides.
       _(see Done — shipped the data-driven analyzer; the actual query edits are now a
       report-driven decision instead of guesswork.)_
@@ -70,7 +74,22 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
-- **2026-06-28** — P3: make YouTube-query tightening data-driven (the "which sources actually
+- **2026-06-29** — P3 coverage: harden `collector/ninja_meta_client.py` (68% → 99% — clears the
+  80% bar). The 2026-06-27 note claimed "every module now clears the 80% bar," but the `/build`
+  meta-source client (shipped 2026-06-22, after most of the coverage sweep) was still at 68%:
+  only its pure aggregation (`aggregate_meta_builds`/`extract_characters`/`_char_class`/
+  `_char_gems`) was tested, while the network/dispatch surface had no coverage. Added offline
+  tests (no network, no DB) following the established pattern: `fetch_popular_builds` (respx —
+  aggregates from the endpoint, attaches the poe.ninja source, reads `league` from config not
+  hardcoded; truncates to `ninja_meta_max_chars` before aggregating); `run` (monkeypatched
+  `fetch_popular_builds` + `db.repo.replace_meta_builds` — write wiring + count + print);
+  `explore` (respx — character count + sampled JSON dump); the `_main` run/explore/default/
+  unknown-command dispatch; and the pure empty-gems branch (a class whose gems all fall below
+  `min_usage` is dropped, never emitted as an empty `MetaBuild`). No production code changed —
+  tests only. +8 offline tests (279 → 287), ruff clean. (Line 172, the `if __name__` guard,
+  is the only line left, conventionally excluded — same as ninja_client's 99%.) Corrected the
+  P3 note to scope the "every module" claim to pure/collector modules and list what stays
+  sub-80% by design: route/wiring glue and the dormant Phase 2 `ggg_client.py`. (the "which sources actually
   inform good guides" item). Until now the only signal for pruning `youtube_queries` was a hunch;
   there was no record of which query surfaced which video, nor whether that video ever fed a guide.
   Added that signal end-to-end: migration `0009` adds `knowledge_chunk.discovery_query`;
