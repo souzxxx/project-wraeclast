@@ -1,6 +1,7 @@
 import pytest
 
 from collector.curate import (
+    build_user_prompt,
     estimate_profit_per_hour,
     parse_llm_json,
     to_farm_strategies,
@@ -65,3 +66,26 @@ def test_to_markdown_contains_estimate_disclaimer():
     strategies = to_farm_strategies(parse_llm_json('{"strategies":[]}'), "test-league")
     md = to_markdown(strategies, "test-league")
     assert "estimate" in md.lower()
+
+
+def test_build_user_prompt_numbers_knowledge_for_citation():
+    knowledge = [
+        {"source_url": "https://www.youtube.com/watch?v=A", "title": "Ritual", "content": "c"},
+        {"source_url": "https://www.youtube.com/watch?v=B", "title": "Abyss", "content": "c"},
+    ]
+    p = build_user_prompt(knowledge, [])
+    assert "[1] Ritual: c" in p
+    assert "[2] Abyss: c" in p
+
+
+def test_to_farm_strategies_resolves_source_refs_to_real_urls():
+    raw = '{"strategies":[{"name":"S","source_refs":[1]}]}'
+    ref_map = [{"url": "https://www.youtube.com/watch?v=A", "title": "A"}]
+    [s] = to_farm_strategies(parse_llm_json(raw), "L", ref_map)
+    assert s.sources == [{"url": "https://www.youtube.com/watch?v=A", "title": "A"}]
+
+
+def test_to_farm_strategies_falls_back_to_llm_sources_without_refs():
+    raw = '{"strategies":[{"name":"S","sources":["https://youtu.be/x"]}]}'
+    [s] = to_farm_strategies(parse_llm_json(raw), "L")
+    assert s.sources == [{"url": "https://youtu.be/x"}]

@@ -33,6 +33,9 @@ class KnowledgeDoc:
     title: str
     content: str
     topic: str | None = None
+    # The search query that surfaced this doc (set by query-driven sources like YouTube), kept for
+    # query-productivity tuning. None for sources with no originating query (RSS, manual).
+    discovery_query: str | None = None
 
 
 def _embeddings_client() -> OpenAI:
@@ -79,6 +82,7 @@ def ingest_documents(docs: list[KnowledgeDoc]) -> int:
                 content=doc.content,
                 embedding=vector,
                 topic=doc.topic or classify_topic(doc.title, doc.content),
+                discovery_query=doc.discovery_query,
             )
         )
     return len(docs)

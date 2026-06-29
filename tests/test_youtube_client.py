@@ -53,6 +53,17 @@ def test_videos_to_docs_empty():
     assert videos_to_docs({"items": None}) == []
 
 
+def test_videos_to_docs_attaches_discovery_query():
+    payload = {"items": [
+        {"id": "abc", "snippet": {"title": "t", "description": "d", "channelTitle": "c"}},
+        {"id": "zzz", "snippet": {"title": "t2", "description": "d", "channelTitle": "c"}},
+    ]}
+    docs = videos_to_docs(payload, {"abc": "ritual farm"})
+    by_id = {d.source_url.rsplit("=", 1)[-1]: d for d in docs}
+    assert by_id["abc"].discovery_query == "ritual farm"
+    assert by_id["zzz"].discovery_query is None  # no attribution for this id
+
+
 async def test_fetch_youtube_returns_empty_without_key():
     # no API key -> short-circuit, never touches the network
     assert await fetch_youtube(Settings(youtube_api_key="")) == []
@@ -91,6 +102,9 @@ async def test_fetch_youtube_dedupes_ids_across_queries():
     assert {d.source_url.rsplit("=", 1)[-1] for d in docs} == {"a", "b", "c"}
     # the duplicate "b" is collapsed and the single videos.list batch keeps insertion order
     assert videos.calls.last.request.url.params.get("id") == "a,b,c"
+    # "b" was surfaced by BOTH queries — attributed to the first ("ritual"), not double-counted
+    attribution = {d.source_url.rsplit("=", 1)[-1]: d.discovery_query for d in docs}
+    assert attribution == {"a": "ritual", "b": "ritual", "c": "abyss"}
 
 
 @respx.mock

@@ -37,8 +37,14 @@ def parse_search_ids(payload: dict[str, Any]) -> list[str]:
     return ids
 
 
-def videos_to_docs(payload: dict[str, Any]) -> list[KnowledgeDoc]:
-    """Map a videos.list response to KnowledgeDocs (title + full description)."""
+def videos_to_docs(
+    payload: dict[str, Any], discovery_by_id: dict[str, str] | None = None
+) -> list[KnowledgeDoc]:
+    """Map a videos.list response to KnowledgeDocs (title + full description).
+
+    `discovery_by_id` maps each video id to the search query that first surfaced it, so the chunk
+    carries query attribution for productivity tuning (collector.query_stats)."""
+    discovery_by_id = discovery_by_id or {}
     docs: list[KnowledgeDoc] = []
     for item in payload.get("items", []) or []:
         vid = item.get("id")
@@ -51,7 +57,10 @@ def videos_to_docs(payload: dict[str, Any]) -> list[KnowledgeDoc]:
         content = f"YouTube guide by {channel}: {title}\n\n{desc}".strip()
         docs.append(
             KnowledgeDoc(
-                source_url=f"https://www.youtube.com/watch?v={vid}", title=title, content=content
+                source_url=f"https://www.youtube.com/watch?v={vid}",
+                title=title,
+                content=content,
+                discovery_query=discovery_by_id.get(vid),
             )
         )
     return docs
@@ -67,6 +76,9 @@ async def fetch_youtube(settings: Settings | None = None) -> list[KnowledgeDoc]:
 
     seen: set[str] = set()
     all_ids: list[str] = []
+    # Attribute each video to the FIRST query that surfaced it (insertion order), so a video found
+    # by several queries doesn't double-count — keeps query-productivity stats honest.
+    discovery_by_id: dict[str, str] = {}
     async with HttpClient(UA) as http:
         for query in settings.youtube_query_list:
             try:
@@ -90,6 +102,7 @@ async def fetch_youtube(settings: Settings | None = None) -> list[KnowledgeDoc]:
                 if vid not in seen:
                     seen.add(vid)
                     all_ids.append(vid)
+                    discovery_by_id[vid] = query
 
         docs: list[KnowledgeDoc] = []
         for i in range(0, len(all_ids), 50):  # videos.list accepts up to 50 ids
@@ -104,7 +117,7 @@ async def fetch_youtube(settings: Settings | None = None) -> list[KnowledgeDoc]:
                 )
             except Exception:  # noqa: BLE001 — one bad batch shouldn't drop the rest
                 continue
-            docs += videos_to_docs(data)
+            docs += videos_to_docs(data, discovery_by_id)
     return docs
 
 

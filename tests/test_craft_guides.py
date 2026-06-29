@@ -82,3 +82,23 @@ def test_parse_salvages_truncated_response():
 def test_parse_rejects_garbage():
     with pytest.raises(ValueError):
         parse_guides_json("not json")
+
+
+def test_build_prompt_numbers_knowledge_for_citation():
+    knowledge = [
+        {"source_url": "https://www.youtube.com/watch?v=A", "title": "Essence", "content": "c"},
+        {"source_url": "https://www.youtube.com/watch?v=B", "title": "Omen", "content": "c"},
+    ]
+    p = build_prompt([], knowledge, "0.5.4", "L")
+    assert "[1] Essence: c" in p
+    assert "[2] Omen: c" in p
+
+
+def test_to_rows_resolves_source_refs_to_real_urls():
+    raw = '{"guides":[{"id":"m0","name":"+3 Spell Skills Wand","source_refs":[2]}]}'
+    ref_map = [
+        {"url": "https://www.youtube.com/watch?v=A", "title": "A"},
+        {"url": "https://www.youtube.com/watch?v=B", "title": "B"},
+    ]
+    rows = to_rows(parse_guides_json(raw), METHODS, ref_map)
+    assert rows[0]["sources"] == [{"url": "https://www.youtube.com/watch?v=B", "title": "B"}]

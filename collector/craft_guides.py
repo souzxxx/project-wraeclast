@@ -23,8 +23,11 @@ from pydantic import BaseModel, ValidationError, field_validator
 from collector.config import get_settings
 from collector.json_salvage import iter_array_objects
 from collector.llm import glm_chat
+from collector.source_refs import number_knowledge, resolve_source_refs
 
 MAX_GUIDES = 8
+_K_MAX = 30  # knowledge entries fed to the model
+_K_CHARS = 700  # chars of each entry's content
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -58,6 +61,9 @@ class _CraftGuide(BaseModel):
     items: list[_Item] = []
     faq: list[_Faq] = []
     sources: list[dict[str, Any]] = []
+    # 1-based numbers of the CRAFT KNOWLEDGE entries the model used; resolved to real chunk URLs in
+    # to_rows (source_refs.resolve_source_refs). Raw here; resolution does the coercion.
+    source_refs: list[Any] = []
 
     @field_validator("steps", "mechanics", mode="before")
     @classmethod
@@ -70,6 +76,11 @@ class _CraftGuide(BaseModel):
         if not isinstance(v, list):
             return []
         return [x if isinstance(x, dict) else {"url": str(x)} for x in v]
+
+    @field_validator("source_refs", mode="before")
+    @classmethod
+    def _source_refs(cls, v: Any) -> list[Any]:
+        return v if isinstance(v, list) else []
 
 
 class _GuidesResponse(BaseModel):
@@ -98,7 +109,11 @@ _SYSTEM = (
     '"archetype","budget":"low|med|high","mechanics":["essence","omen",...],'
     '"overview"(2-3 frases),"steps":["passos concretos em ordem, SEM números de custo/ROI"],'
     '"items":[{"name","purpose"}](orbs/essences/omens/runas/catalysts e por quê),'
-    '"faq":[{"q","a"}](dúvidas e erros comuns),"sources":[{"url","title"}]}]}. '
+    '"faq":[{"q","a"}](dúvidas e erros comuns),"source_refs":[números do CRAFT KNOWLEDGE usado]}'
+    "]}. "
+    "The CRAFT KNOWLEDGE entries are numbered [1], [2], …; in `source_refs` list only the numbers "
+    "of the entries that actually grounded each guide (e.g. [2,5]) — these are the [n] knowledge "
+    "refs, NOT the method ids m#. "
     "Seja específico e prático."
 )
 
@@ -138,18 +153,24 @@ def _norm(s: str | None) -> str:
 
 
 def to_rows(
-    resp: _GuidesResponse, methods_ev: list[dict[str, Any]] | None = None
+    resp: _GuidesResponse,
+    methods_ev: list[dict[str, Any]] | None = None,
+    ref_map: list[dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Project parsed guides to rows, taking cost/ROI from the EV engine — matched back to each
     method by its verbatim `id` (m0, m1, …), falling back to a normalised name — so the numbers
     are calculated, never LLM-invented even if the model tweaks the name. Best-ROI first (None
     last)."""
     methods_ev = methods_ev or []
+    ref_map = ref_map or []
     by_id = {f"m{i}": m for i, m in enumerate(methods_ev)}
     by_name = {_norm(m.get("name")): m for m in methods_ev if m.get("name")}
     rows: list[dict[str, Any]] = []
     for g in resp.guides[:MAX_GUIDES]:
         ev = by_id.get(g.id.strip()) or by_name.get(_norm(g.name)) or {}
+        # Prefer real chunk URLs resolved from the model's numeric citations; fall back to whatever
+        # the model put in `sources` only when it gave no usable refs (keeps display non-empty).
+        sources = resolve_source_refs(g.source_refs, ref_map) or g.sources
         rows.append(
             {
                 "name": g.name,
@@ -163,7 +184,7 @@ def to_rows(
                 "steps": g.steps,
                 "items": [i.model_dump() for i in g.items],
                 "faq": [f.model_dump() for f in g.faq],
-                "sources": g.sources,
+                "sources": sources,
             }
         )
     rows.sort(key=lambda r: (r["roi_pct"] is not None, r["roi_pct"] or 0), reverse=True)
@@ -190,14 +211,14 @@ def build_prompt(
     methods_block = "\n".join(
         f"m{i}: {fmt(m)}" for i, m in enumerate(methods_ev[:MAX_GUIDES])
     )
-    k = [f"- {x.get('title')}: {(x.get('content') or '')[:700]}" for x in knowledge[:30]]
+    numbered, _ = number_knowledge(knowledge[:_K_MAX], _K_CHARS)
     return (
         f"PATCH: PoE2 {patch} — league {league} (the ONLY version you may name)\n\n"
         "EV-RANKED CRAFT METHODS (each has an id m#; echo it back. Numbers are computed — use "
         "them, never write them in prose):\n"
         + methods_block
         + "\n\nCRAFT KNOWLEDGE:\n"
-        + "\n".join(k)
+        + numbered
         + "\n\nWrite the PT-BR craft guides as strict JSON."
     )
 
@@ -205,6 +226,7 @@ def build_prompt(
 def generate(
     methods_ev: list[dict[str, Any]], knowledge: list[dict[str, Any]], patch: str, league: str
 ) -> list[dict[str, Any]]:
+    _, ref_map = number_knowledge(knowledge[:_K_MAX], _K_CHARS)
     text = glm_chat(
         [
             {"role": "system", "content": _SYSTEM},
@@ -213,7 +235,7 @@ def generate(
         model=get_settings().glm_curation_model,
         temperature=0.4,
     )
-    return to_rows(parse_guides_json(text), methods_ev)
+    return to_rows(parse_guides_json(text), methods_ev, ref_map)
 
 
 def run() -> int:
