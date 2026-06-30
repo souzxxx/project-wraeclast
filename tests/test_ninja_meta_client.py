@@ -1,12 +1,24 @@
-"""Offline tests for meta-build aggregation (pure — no DB, no network)."""
+"""Offline tests for meta-build aggregation (pure) and the network/dispatch surface
+(fetch/run/explore/_main, mocked with respx + monkeypatch — no DB, no live network)."""
 
+import httpx
+import respx
+
+import collector.ninja_meta_client as nmc
 from api.build_diff import compute_build_diff
+from collector.config import Settings
 from collector.ninja_meta_client import (
     _char_class,
     _char_gems,
+    _main,
     aggregate_meta_builds,
+    explore,
     extract_characters,
+    fetch_popular_builds,
+    run,
 )
+
+BUILDS_URL = "https://poe.ninja/poe2/api/builds/overview"
 
 
 def _char(cls, *gems):
@@ -103,3 +115,77 @@ def test_aggregate_output_feeds_build_diff():
     assert diff["consider_adding"] == ["Spell Echo"]
     assert diff["consider_cutting"] == ["Fireball"]
     assert diff["shared"] == ["Comet"]
+
+
+def test_aggregate_drops_class_with_no_qualifying_gems():
+    # 3 chars, every gem unique -> each at 33%; min_usage=0.5 filters them all out, so the
+    # class yields no gems and is dropped entirely (no empty-gem MetaBuild emitted).
+    chars = [_char("Witch", "A"), _char("Witch", "B"), _char("Witch", "C")]
+    assert aggregate_meta_builds(chars, "L", min_usage=0.5, min_sample=3) == []
+
+
+@respx.mock
+async def test_fetch_popular_builds_aggregates_from_endpoint():
+    payload = {"characters": [_char("Witch", "Comet", "Frostbolt") for _ in range(3)]}
+    route = respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json=payload))
+    builds = await fetch_popular_builds(Settings())
+    assert route.called
+    [build] = builds
+    assert build.char_class == "Witch"
+    assert build.league == "Runes of Aldur"  # config default, not hardcoded in the client
+    assert [g["name"] for g in build.gems] == ["Comet", "Frostbolt"]
+    # the poe.ninja source is attached so the build-diff can cite where the meta came from
+    assert build.sources == [{"url": "https://poe.ninja/poe2/builds", "title": "poe.ninja builds"}]
+
+
+@respx.mock
+async def test_fetch_popular_builds_truncates_to_max_chars():
+    # 5 characters on the wire, but ninja_meta_max_chars caps the sample at 3 before aggregation.
+    payload = {"characters": [_char("Witch", "Comet") for _ in range(5)]}
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(Settings(ninja_meta_max_chars=3))
+    assert build.sample_size == 3
+
+
+async def test_run_writes_meta_builds(monkeypatch, capsys):
+    builds = aggregate_meta_builds([_char("Witch", "Comet")] * 3, "Runes of Aldur", min_sample=3)
+
+    async def fake_fetch(settings):
+        return builds
+
+    written: list = []
+    monkeypatch.setattr(nmc, "fetch_popular_builds", fake_fetch)
+    monkeypatch.setattr(
+        "db.repo.replace_meta_builds",
+        lambda league, b: written.append((league, b)) or len(b),
+    )
+    assert await run() == 1
+    assert written == [("Runes of Aldur", builds)]
+    assert "meta_build: wrote 1" in capsys.readouterr().out
+
+
+@respx.mock
+async def test_explore_dumps_character_count_and_sample(capsys):
+    payload = {"characters": [_char("Witch", "Comet"), _char("Monk", "Tempest")]}
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json=payload))
+    await explore()
+    out = capsys.readouterr().out
+    assert "characters found: 2" in out
+    assert "Comet" in out  # first chars sampled into the JSON dump
+
+
+def test_main_dispatches_run(monkeypatch):
+    called: list = []
+    monkeypatch.setattr(nmc.asyncio, "run", lambda coro: called.append(coro) or coro.close())
+    assert _main(["prog", "run"]) == 0
+    assert _main(["prog"]) == 0  # default command is run
+    assert len(called) == 2
+
+
+def test_main_dispatches_explore(monkeypatch):
+    monkeypatch.setattr(nmc.asyncio, "run", lambda coro: coro.close())
+    assert _main(["prog", "explore"]) == 0
+
+
+def test_main_unknown_command_returns_2():
+    assert _main(["prog", "bogus"]) == 2
