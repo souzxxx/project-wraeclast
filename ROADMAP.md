@@ -89,7 +89,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
   tests only. +8 offline tests (279 → 287), ruff clean. (Line 172, the `if __name__` guard,
   is the only line left, conventionally excluded — same as ninja_client's 99%.) Corrected the
   P3 note to scope the "every module" claim to pure/collector modules and list what stays
-  sub-80% by design: route/wiring glue and the dormant Phase 2 `ggg_client.py`. (the "which sources actually
+  sub-80% by design: route/wiring glue and the dormant Phase 2 `ggg_client.py`.
+- **2026-06-28** — P3: make YouTube-query tightening data-driven (the "which sources actually
   inform good guides" item). Until now the only signal for pruning `youtube_queries` was a hunch;
   there was no record of which query surfaced which video, nor whether that video ever fed a guide.
   Added that signal end-to-end: migration `0009` adds `knowledge_chunk.discovery_query`;
