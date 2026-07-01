@@ -50,7 +50,7 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       build-diff stops degrading to "not comparable". _(see Done)_
 - [x] Price history: store/show sparklines per currency on the "Hoje" tab (data already in
       `price_snapshot` over time). _(see Done)_
-- [ ] Mobile layout polish for the dashboard, farms, and graph.
+- [x] Mobile layout polish for the dashboard, farms, and graph. _(see Done)_
 - [ ] Phase 2 (optional, only if the owner enables it): GGG OAuth 2.1 + PKCE for real-time
       stash currency (net worth) and off-ladder characters. Scaffolding in `collector/ggg_client.py`.
 
@@ -75,6 +75,19 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-01** — P2: mobile layout polish (dashboard, farms, graph). The shared `Nav` had no
+  mobile breakpoint, so on phones (≤640px) the brand sat vertically centered against a 3-line
+  wrapped tab block — a genuinely messy header on every page (confirmed via Playwright screenshots
+  at 375px). Added a focused, desktop-first mobile block in `web/app/globals.css`: at ≤640px the
+  nav wraps so **WRAECLAST** takes its own row with the five tabs in one tidy row beneath it
+  (active underline preserved), and `main` gains a touch more content width; the farms accordion
+  header (`.guide-head`) now lets a long guide name shrink/wrap instead of shoving the profit/risk
+  meta off-row, dropping the meta to its own line on narrow screens; and at ≤460px dashboard price
+  sparklines clip an over-long currency name (ellipsis) so the value/change stay aligned. CSS-only,
+  no component/logic changes; desktop and tablet (>640px, verified at 768px) are untouched.
+  Verified offline: `ruff check .` clean + `pytest -q` 299 passed (Python unaffected); web
+  `tsc --noEmit` clean, `vitest run` 21 passed, `next build` green; before/after 375px screenshots
+  confirm the nav fix across Hoje/Farms/Cérebro.
 - **2026-06-30** — P3 coverage: harden `collector/ggg_client.py` (0% → 100%). This was the one
   substantive module with **no test file at all** — never imported by the suite, so the coverage
   report skipped it entirely. It is dormant Phase 2 OAuth (skill §2, not in the daily path), but
