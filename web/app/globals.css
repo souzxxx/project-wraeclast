@@ -659,6 +659,43 @@ textarea:focus, input:focus { outline: none; border-color: var(--gold-dim); box-
 .addknow summary:hover { color: var(--text); }
 .addknow[open] summary { color: var(--gold); margin-bottom: 0.8rem; }
 
+/* ════════════════════════════════════════════════════════════════════════
+   MOBILE POLISH (phones ≤ 640px) — dashboard, farms, graph, shared nav
+   The default layout is desktop-first; these rules keep narrow screens tidy
+   without touching the wider breakpoints above.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* let long farm/guide names shrink instead of shoving the meta off-row */
+.guide-head .name { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  /* nav: brand on its own row, tabs wrap neatly full-width beneath it — the
+     default centers the brand against a 3-line wrapped tab block on phones. */
+  .nav {
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.55rem 1rem;
+    padding: 0.7rem 1.1rem;
+  }
+  .nav .brand { flex-basis: 100%; }
+  .nav .tabs { width: 100%; gap: 0.75rem 1.15rem; }
+
+  /* a touch more content width on small phones */
+  main { padding: 2.25rem 1rem 4rem; }
+
+  /* farms accordion: keep the header readable when the name is long — let the
+     meta drop below the name rather than crushing both onto one line. */
+  .guide-head { align-items: flex-start; flex-wrap: wrap; }
+  .guide-head .meta { width: 100%; justify-content: flex-start; }
+}
+
+@media (max-width: 460px) {
+  /* dashboard sparklines: never let a long currency name push the row wider
+     than the card — clip it and keep the value/change aligned. */
+  .spark-row { gap: 0.6rem; }
+  .spark-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
 /* ── reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
