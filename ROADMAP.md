@@ -61,11 +61,12 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       `collector/ninja_client.py` 51% → 99%, see Done 2026-06-25;
       `collector/llm.py` 25% → 100%, see Done 2026-06-26;
       `db/repo.py` 30% → 100% and `db/connection.py` 33% → 98%, see Done 2026-06-27;
-      `collector/ninja_meta_client.py` 68% → 99%, see Done 2026-06-29.
-      Every pure/collector module now clears the 80% bar. Still sub-80% by design:
+      `collector/ninja_meta_client.py` 68% → 99%, see Done 2026-06-29;
+      `collector/ggg_client.py` 0% → 100%, see Done 2026-06-30.
+      Every pure/collector module now clears the 80% bar — including the dormant Phase 2
+      OAuth client, hardened ahead of any future enablement. Still sub-80% by design:
       route/wiring modules (`api/routes/*`, `api/main.py`, `collector/run_daily.py`,
-      `scripts/export_obsidian.py`) that are integration glue needing the live app, and
-      `collector/ggg_client.py` (dormant Phase 2 OAuth, not in the daily path).)_
+      `scripts/export_obsidian.py`) that are integration glue needing the live app.)_
 - [x] Tighten the YouTube queries based on which sources actually inform good guides.
       _(see Done — shipped the data-driven analyzer; the actual query edits are now a
       report-driven decision instead of guesswork.)_
@@ -74,6 +75,22 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-06-30** — P3 coverage: harden `collector/ggg_client.py` (0% → 100%). This was the one
+  substantive module with **no test file at all** — never imported by the suite, so the coverage
+  report skipped it entirely. It is dormant Phase 2 OAuth (skill §2, not in the daily path), but
+  the prior note's "by design" exclusion meant the GGG token flow had zero regression protection
+  before any future enablement. Added offline tests (no network, no DB — never touch
+  pathofexile.com), following the established pattern: pure `generate_pkce_pair` (the challenge is
+  the S256 of the verifier; both url-safe + unpadded per the PKCE spec; verifier is random per
+  call); pure `build_authorize_url` (all seven OAuth params present and correctly encoded; reads
+  `client_id` from settings, falling back to `get_settings`); and the httpx token surface mocked
+  with respx — `exchange_code` (returns a `TokenSet`; posts the `authorization_code` grant with
+  code/verifier/redirect; an empty secret is sent as `null` for the public/PKCE client, while a
+  configured secret is forwarded for the confidential client; missing `refresh_token`/`expires_in`
+  default to `None`/`0`; `get_settings` fallback) and `refresh_token` (posts the `refresh_token`
+  grant; **keeps the currently-held refresh token when GGG's response omits a rotated one** — the
+  `data.get("refresh_token", refresh)` contract; `get_settings` fallback). No production code
+  changed — tests only. +12 offline tests (287 → 299), ruff clean.
 - **2026-06-29** — P3 coverage: harden `collector/ninja_meta_client.py` (68% → 99% — clears the
   80% bar). The 2026-06-27 note claimed "every module now clears the 80% bar," but the `/build`
   meta-source client (shipped 2026-06-22, after most of the coverage sweep) was still at 68%:
