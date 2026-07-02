@@ -64,9 +64,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       `collector/ninja_meta_client.py` 68% → 99%, see Done 2026-06-29;
       `collector/ggg_client.py` 0% → 100%, see Done 2026-06-30.
       Every pure/collector module now clears the 80% bar — including the dormant Phase 2
-      OAuth client, hardened ahead of any future enablement. Still sub-80% by design:
-      route/wiring modules (`api/routes/*`, `api/main.py`, `collector/run_daily.py`,
-      `scripts/export_obsidian.py`) that are integration glue needing the live app.)_
+      OAuth client, hardened ahead of any future enablement. The HTTP route layer
+      (`api/routes/*` + `api/main.py` read endpoints) is now covered offline too, driven
+      through `TestClient` with the repo layer monkeypatched (see Done 2026-07-02). Still
+      sub-80% by design: pipeline-orchestration glue that only makes sense against the live
+      app/DB (`collector/run_daily.py`, `scripts/export_obsidian.py`).)_
 - [x] Tighten the YouTube queries based on which sources actually inform good guides.
       _(see Done — shipped the data-driven analyzer; the actual query edits are now a
       report-driven decision instead of guesswork.)_
@@ -75,6 +77,27 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-02** — P3 coverage: harden the HTTP route layer (`api/routes/*` + `api/main.py`
+  read endpoints), which sat at **0% coverage** — the public contract the Next.js site depends
+  on had zero regression protection, so a renamed field or a wrong status code would have shipped
+  silently. The prior P3 note excluded these as "integration glue needing the live app," but every
+  route defers its `db.repo` import to call time, so the whole layer is drivable offline through
+  FastAPI's `TestClient` with `db.repo.*` monkeypatched — no network, no Neon, same pattern the
+  rest of the suite already uses. New `tests/test_routes_http.py` exercises: the static endpoints
+  (`/health` incl. the read-cache header, `/`); `/farm` + `/farm/guides` (shape, `note`, and the
+  `max(1, min(limit, 100))` clamp at both ends); `/price-history` (the `days` floor/ceiling guard
+  before the query, empty-rows → empty sparklines); `/graph` (real `build_graph` over an empty
+  corpus still yields nodes/links); `/build` (404 without a snapshot, graceful "not comparable"
+  degrade without meta, comparable-with-meta, and the `_load_meta_build` short-circuit that must
+  NOT query when the class is unset); every `/craft/*` route (`knowledge` card projection + clamp,
+  `guides`, `alerts`, `ev` note/ranking); the gated `POST /ingest` (401 without token, fail-closed
+  503 when unconfigured, happy path asserting the strip-then-ingest contract, `min_length` rejection
+  of an empty payload); and `main.py`'s `/state` aggregation + `/prices` currency-only projection.
+  Also pins the base-`Exception` handler: an unhandled error returns a JSON 500 **with the CORS
+  origin echoed** (the contract that keeps the browser from seeing an opaque NetworkError, per the
+  handler's own comment). League is always read from `get_settings()`, never hardcoded. No
+  production code changed — tests only. +23 offline tests (299 → 322); `api/routes/*` and
+  `api/main.py` now at 100%. ruff clean.
 - **2026-07-01** — P2: mobile layout polish (dashboard, farms, graph). The shared `Nav` had no
   mobile breakpoint, so on phones (≤640px) the brand sat vertically centered against a 3-line
   wrapped tab block — a genuinely messy header on every page (confirmed via Playwright screenshots
