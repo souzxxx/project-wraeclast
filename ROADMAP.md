@@ -66,9 +66,12 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       Every pure/collector module now clears the 80% bar — including the dormant Phase 2
       OAuth client, hardened ahead of any future enablement. The HTTP route layer
       (`api/routes/*` + `api/main.py` read endpoints) is now covered offline too, driven
-      through `TestClient` with the repo layer monkeypatched (see Done 2026-07-02). Still
-      sub-80% by design: pipeline-orchestration glue that only makes sense against the live
-      app/DB (`collector/run_daily.py`, `scripts/export_obsidian.py`).)_
+      through `TestClient` with the repo layer monkeypatched (see Done 2026-07-02). The last
+      two 0%-coverage modules — the daily orchestrator (`collector/run_daily.py` 0% → 95%) and
+      the Obsidian exporter (`scripts/export_obsidian.py` 0% → 98%) — are now covered offline
+      too by monkeypatching each step target / repo read (see Done 2026-07-03), so **every
+      module in the project clears the 80% bar**; only the `__main__` guards remain, as
+      conventionally excluded elsewhere.)_
 - [x] Tighten the YouTube queries based on which sources actually inform good guides.
       _(see Done — shipped the data-driven analyzer; the actual query edits are now a
       report-driven decision instead of guesswork.)_
@@ -77,6 +80,28 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-03** — P3 coverage: harden the last two 0%-coverage modules, closing out the
+  "every module ≥80%" story. `collector/run_daily.py` (0% → 95%) and `scripts/export_obsidian.py`
+  (0% → 98%) were the only modules the suite never touched — the daily orchestrator and the
+  owner-facing Obsidian report builder. The prior P3 note excluded both as "pipeline glue that
+  only makes sense against the live app/DB," but neither actually needs live infra: `run_all`
+  looks up every step target as a module attribute at call time, and `export_obsidian.run`
+  defers its `db.repo` / `api.craft_ev` imports — the same deferral pattern that made the route
+  layer and the DB layer offline-drivable in earlier sweeps. New `tests/test_export_obsidian.py`
+  covers `render_report` end-to-end (frontmatter carries the config-driven league + dated tag;
+  farm ranking with the `.get()` n/a fallbacks and the summary line; the priced-ROI vs
+  unpriceable craft branches; gem-name filtering incl. the empty-gems no-`Gems:`-line case; all
+  three empty-section placeholders; the `today=None` → `date.today()` default) and `run()`
+  (repo reads + `rank_methods` monkeypatched, vault → `tmp_path`: asserts the file is written to
+  `mkdir(parents=True)` nesting, the filename shape, `price_count = len(prices)`, and that
+  `league` is threaded from config into the repo read — never hardcoded). New
+  `tests/test_run_daily.py` covers `_step` (records `ok`/`result` on success; swallows the
+  exception and records `ok=False`/`error` without propagating — the resilience contract) and
+  `run_all` (every step recorded as OK with all 12 step names present; `pob_code` threaded into
+  `my_build` and only there; and a mid-sequence step failure isolated to `failed_steps` while
+  every later step still runs). No production code changed — tests only. +9 offline tests
+  (322 → 331); `run_daily.py`/`export_obsidian.py` misses are only their `__main__` guards.
+  ruff clean.
 - **2026-07-02** — P3 coverage: harden the HTTP route layer (`api/routes/*` + `api/main.py`
   read endpoints), which sat at **0% coverage** — the public contract the Next.js site depends
   on had zero regression protection, so a renamed field or a wrong status code would have shipped
