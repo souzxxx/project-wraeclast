@@ -68,9 +68,11 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       Every pure/collector module now clears the 80% bar — including the dormant Phase 2
       OAuth client, hardened ahead of any future enablement. The HTTP route layer
       (`api/routes/*` + `api/main.py` read endpoints) is now covered offline too, driven
-      through `TestClient` with the repo layer monkeypatched (see Done 2026-07-02). Still
-      sub-80% by design: pipeline-orchestration glue that only makes sense against the live
-      app/DB (`collector/run_daily.py`, `scripts/export_obsidian.py`).)_
+      through `TestClient` with the repo layer monkeypatched (see Done 2026-07-02). The last
+      two 0%-coverage modules — the daily orchestrator `collector/run_daily.py` and the Obsidian
+      exporter `scripts/export_obsidian.py` — are now covered offline too (95% / 98%, only the
+      `__main__` guards remain), so **every module in the project clears the 80% bar** (see Done
+      2026-07-05).)_
 - [x] Tighten the YouTube queries based on which sources actually inform good guides.
       _(see Done — shipped the data-driven analyzer; the actual query edits are now a
       report-driven decision instead of guesswork.)_
@@ -96,6 +98,27 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
   exploration):** `step meta_builds FAILED: 404` on `poe.ninja/poe2/api/builds/overview` — the
   PoE2 builds path was flagged "unconfirmed" back in the 2026-06-22 note and needs a live
   `explore` run against the deploy to find the right route; can't be verified offline.
+- **2026-07-05** — P3 coverage: cover the last two 0%-coverage modules offline — the daily
+  orchestrator `collector/run_daily.py` (0% → 95%) and the Obsidian exporter
+  `scripts/export_obsidian.py` (0% → 98%). These were the only modules the coverage sweep still
+  excluded as "pipeline glue that only makes sense against the live app/DB", but both defer their
+  `db.repo` / `api.craft_ev` imports to call time (same seam the route layer used on 2026-07-02),
+  so they drive fully offline — no DB, no network. New `tests/test_export_obsidian.py` exercises
+  the pure `render_report` across every branch (frontmatter + `price_count` line; farms numbered
+  with `n/a` fallbacks for absent risk/investment and the summary-bullet only when present; priced
+  crafts showing ROI vs the unpriced `missing_prices` branch, incl. `roi_pct=None` routing there
+  and the empty-mechanics → `"craft"` default; a snapshot with mixed dict/str gems where nameless
+  gems are filtered, vs the `?`-placeholder path; the `today` default), plus `run()` wired to a
+  tmp vault with `db.repo.*` + `rank_methods` + `get_settings` monkeypatched (dated filename from
+  the configured league, content, and the idempotent same-day overwrite — one `.md`, not two). New
+  `tests/test_run_daily.py` covers `_step` (success record vs exception swallowed into
+  `{"ok": False, "error": …}`) and `run_all` with every step's `run` patched — async stubs for the
+  awaited network steps, plain stubs for the `to_thread` sync steps — asserting the 12-step order,
+  the `pob_code` passthrough into `my_build`, the `ok_steps`/`failed_steps` summary split, and the
+  resilience contract at the middle and both edges (one failing step is isolated and everything
+  downstream still runs). No production code changed — tests only. +15 offline tests (322 → 337);
+  `run_daily.py` and `export_obsidian.py` now clear the 80% bar, completing the coverage sweep.
+  ruff clean.
 - **2026-07-04** — P0 health: stop the daily collection from failing **silently**. `run_all`
   wraps every step so one failure is logged and the rest still run (resilient collection) — but
   it recorded failures only in an in-memory `results` dict and the process always exited 0. So a
