@@ -77,6 +77,23 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
+  The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
+  the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
+  type(s) for *: 'decimal.Decimal' and 'float'` — the P1 "what changed today" insight report
+  (`scripts/daily_insight.py`) has produced nothing in production since prices went
+  divine-denominated. Root cause: psycopg returns NUMERIC columns as `Decimal`, and
+  `notable_price_moves` did `(now - old) / old * 100.0`, mixing `Decimal` with `float`. The pure
+  tests never caught it because they feed Python floats. `_row_value` claimed to "mirror
+  `api.craft_ev.price_index`" but omitted exactly that module's `_f()` Decimal→float coercion, so
+  the fix restores it at that single boundary (craft_ev/craft_alerts already coerce and were
+  unaffected). +2 offline regression tests feeding `Decimal` rows exactly as the DB does
+  (`notable_price_moves` for both the chaos and divine columns, and the full `compute_insight` →
+  `render_insight` path). ruff clean; `pytest -q` 322 → 324. One-line production change; no schema
+  or league hardcoding. **Still failing in that same run (out of scope tonight, needs live endpoint
+  exploration):** `step meta_builds FAILED: 404` on `poe.ninja/poe2/api/builds/overview` — the
+  PoE2 builds path was flagged "unconfirmed" back in the 2026-06-22 note and needs a live
+  `explore` run against the deploy to find the right route; can't be verified offline.
 - **2026-07-02** — P3 coverage: harden the HTTP route layer (`api/routes/*` + `api/main.py`
   read endpoints), which sat at **0% coverage** — the public contract the Next.js site depends
   on had zero regression protection, so a renamed field or a wrong status code would have shipped
