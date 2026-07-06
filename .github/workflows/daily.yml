@@ -48,6 +48,9 @@ jobs:
           OBSIDIAN_VAULT_DIR: reports
         run: python -m collector.run_daily
       - name: Commit daily report
+        # `always()` so a resilient collection that surfaced a failed step (run_daily exits
+        # non-zero to go red) still commits the day's report — the run is red AND the data lands.
+        if: always()
         run: |
           git config user.name "wraeclast-bot"
           git config user.email "actions@users.noreply.github.com"

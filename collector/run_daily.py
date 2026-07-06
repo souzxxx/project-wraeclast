@@ -2,7 +2,10 @@
 
 ninja_client -> ninja_build_client -> youtube -> rss -> curate -> guides -> export_obsidian
 -> daily_insight.
-Each step is wrapped so one failure is logged and the rest still run (resilient collection).
+Each step is wrapped so one failure is logged and the rest still run (resilient collection),
+but the run then exits non-zero and emits GitHub Actions annotations so a failed collector is
+NEVER silently green — the whole point is that the owner sees a red X, not a buried log line.
+The daily report is still committed because the workflow's commit step runs with `if: always()`.
 Invoked by GitHub Actions: `python -m collector.run_daily`.
 """
 
@@ -10,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import traceback
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -70,6 +74,63 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     return results
 
 
-if __name__ == "__main__":
+def _one_line(text: object) -> str:
+    """Collapse whitespace/newlines: GitHub annotations render on a single line."""
+    return " ".join(str(text).split())
+
+
+def render_annotations(results: dict[str, Any]) -> list[str]:
+    """One GitHub Actions '::error::' workflow command per failed step.
+
+    Pure over its input so it's unit-testable offline. Printing these makes each failed
+    collector show up as an annotation on the run page instead of a buried log line.
+    """
+    failed = results.get("summary", {}).get("failed_steps", [])
+    lines: list[str] = []
+    for name in failed:
+        err = _one_line(results.get(name, {}).get("error", "unknown error"))
+        lines.append(f"::error title=Daily collection::step '{name}' failed: {err}")
+    return lines
+
+
+def render_step_summary(results: dict[str, Any]) -> str:
+    """Markdown for `$GITHUB_STEP_SUMMARY` — a run-page recap of OK vs failed steps.
+
+    Pure over its input so it's unit-testable offline.
+    """
+    summary = results.get("summary", {})
+    ok = summary.get("ok_steps", [])
+    failed = summary.get("failed_steps", [])
+    lines = ["## Daily collection", "", f"- OK: {len(ok)} · Failed: {len(failed)}", ""]
+    if failed:
+        lines += ["| Step | Error |", "| --- | --- |"]
+        for name in failed:
+            err = _one_line(results.get(name, {}).get("error", "unknown error"))
+            lines.append(f"| `{name}` | {err} |")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def main() -> int:
+    """Run the daily collection, surface any failures, and return the process exit code.
+
+    Returns 1 when any step failed so the Actions run goes red (never silently green);
+    the report still commits because the workflow's commit step uses `if: always()`.
+    """
     out = asyncio.run(run_all())
-    log.info("daily run complete: %s", out["summary"])
+    summary = out["summary"]
+    log.info("daily run complete: %s", summary)
+    for line in render_annotations(out):
+        print(line)
+    step_summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if step_summary_path:
+        try:
+            with open(step_summary_path, "a", encoding="utf-8") as fh:
+                fh.write(render_step_summary(out) + "\n")
+        except OSError as exc:  # reporting IO must never sink the run
+            log.warning("could not write GITHUB_STEP_SUMMARY: %s", exc)
+    return 1 if summary["failed_steps"] else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

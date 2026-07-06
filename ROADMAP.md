@@ -10,6 +10,8 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 ## P0 — Health (always check first)
 - [ ] `ruff check .` and `pytest -q` are green; if not, fix the breakage.
 - [ ] No daily-collection step is silently failing (check the latest GitHub Actions run / logs).
+      _(now enforced, not just eyeballed: `run_daily` exits non-zero + emits Actions annotations
+      when any step fails, so a swallowed collector error goes red instead of silently green — see Done 2026-07-04.)_
 - [ ] No secret committed; `.env` stays gitignored.
 
 ## P1 — Daily intelligence layer
@@ -94,6 +96,25 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
   exploration):** `step meta_builds FAILED: 404` on `poe.ninja/poe2/api/builds/overview` — the
   PoE2 builds path was flagged "unconfirmed" back in the 2026-06-22 note and needs a live
   `explore` run against the deploy to find the right route; can't be verified offline.
+- **2026-07-04** — P0 health: stop the daily collection from failing **silently**. `run_all`
+  wraps every step so one failure is logged and the rest still run (resilient collection) — but
+  it recorded failures only in an in-memory `results` dict and the process always exited 0. So a
+  collector could fail **every single day** and the Actions run would still show a green ✓; the
+  only trace was a buried `run_daily` log line nobody reads. The P0 "no step is silently failing"
+  check had no enforcement — it relied on the owner manually eyeballing Actions logs. Fixed the
+  gap without weakening resilience: added pure, offline-testable `render_annotations` (one
+  `::error title=Daily collection::…` workflow command per failed step, whitespace-collapsed to a
+  single line) and `render_step_summary` (a `$GITHUB_STEP_SUMMARY` OK/failed recap table), and a
+  `main()` that runs the collection, emits both, and **returns exit code 1 when any step failed**
+  so the run goes red. The per-step try/except and full-sequence execution are untouched — every
+  step still runs, the failure is just no longer invisible. `daily.yml`'s "Commit daily report"
+  step now uses `if: always()`, so a red run still commits the day's report (the data lands **and**
+  the owner sees the X). New `tests/test_run_daily.py` covers the annotation/summary rendering
+  (empty when all-ok, one line per failure, multiline collapse, missing-error-field default),
+  `main`'s exit code (0 clean / 1 on failure) + annotation emission + step-summary write + graceful
+  survival of an unwritable summary path, and that `_step` records a failure without stopping later
+  steps. +11 offline tests (322 → 333). ruff clean. No collector logic changed — only failure
+  surfacing.
 - **2026-07-02** — P3 coverage: harden the HTTP route layer (`api/routes/*` + `api/main.py`
   read endpoints), which sat at **0% coverage** — the public contract the Next.js site depends
   on had zero regression protection, so a renamed field or a wrong status code would have shipped
