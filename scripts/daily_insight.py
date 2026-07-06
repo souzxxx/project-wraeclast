@@ -40,9 +40,13 @@ TOP_N = 5
 
 def _row_value(row: dict[str, Any]) -> float | None:
     """Price in the feed's own denomination — chaos if present, else divine (PoE2). Mirrors
-    api.craft_ev.price_index so the daily report isn't blind to the divine-denominated feed."""
+    api.craft_ev.price_index (incl. its Decimal->float coercion) so the daily report isn't blind
+    to the divine-denominated feed. psycopg returns NUMERIC columns as Decimal, and Decimal
+    doesn't mix with float in the pct math below, so coerce at this single boundary."""
     v = row.get("chaos_value")
-    return v if v is not None else row.get("divine_value")
+    if v is None:
+        v = row.get("divine_value")
+    return float(v) if v is not None else None
 
 
 # ── models ────────────────────────────────────────────────────────────────────────
