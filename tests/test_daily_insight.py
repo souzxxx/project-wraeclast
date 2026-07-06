@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 
 from scripts.daily_insight import (
     canonical_farm_key,
@@ -89,6 +90,42 @@ def test_price_moves_detect_divine_denominated_feed():
     moves = notable_price_moves([_d("Big", 1.5, T1)], [_d("Big", 1.0, T0)])
     assert [m.name for m in moves] == ["Big"]  # +50%, +0.5 div clears the floor
     assert moves[0].pct == 50.0
+
+
+def test_price_moves_handle_decimal_values_from_db():
+    # Regression: psycopg returns NUMERIC columns as Decimal, and Decimal doesn't mix with the
+    # float `* 100.0` in the pct math — this silently failed every daily run in production while
+    # the float-fed tests above stayed green. Feed Decimals (both the chaos and divine columns)
+    # exactly as the DB does and assert the move is computed, not a TypeError.
+    def _dec(name, chaos, divine, when):
+        return {"name": name, "item_type": "currency",
+                "chaos_value": Decimal(str(chaos)) if chaos is not None else None,
+                "divine_value": Decimal(str(divine)) if divine is not None else None,
+                "captured_at": when}
+
+    latest = [_dec("Chaos", 2.0, None, T1), _dec("Div", None, 1.5, T1)]
+    prev = [_dec("Chaos", 1.5, None, T0), _dec("Div", None, 1.0, T0)]
+    moves = notable_price_moves(latest, prev)
+    by_name = {m.name: m for m in moves}
+    assert set(by_name) == {"Chaos", "Div"}
+    assert by_name["Chaos"].pct == 33.3
+    assert by_name["Div"].pct == 50.0
+    # values are plain floats on the model, not Decimal
+    assert isinstance(by_name["Div"].to_chaos, float)
+
+
+def test_compute_insight_end_to_end_with_decimal_prices():
+    # Full daily-insight path (as run() feeds it) with Decimal-valued price rows — must not raise.
+    farms = [_farm("A", 10, T1), _farm("A", 8, T0)]
+    prices = [
+        {"name": "Mirror", "item_type": "currency", "chaos_value": None,
+         "divine_value": Decimal("3.0"), "captured_at": T1},
+        {"name": "Mirror", "item_type": "currency", "chaos_value": None,
+         "divine_value": Decimal("1.0"), "captured_at": T0},  # +200% -> anomaly
+    ]
+    ins = compute_insight("Runes of Aldur", farms, prices, [], today=date(2026, 6, 19))
+    assert any("Mirror" in a and "jumped" in a for a in ins.anomalies)
+    render_insight(ins)  # renders without raising
 
 
 def test_price_moves_ignore_missing_baseline_and_zero_old():
