@@ -67,10 +67,13 @@ class Settings(BaseSettings):
     ninja_profile_path: str = "/poe2/api/profile/characters"
     ninja_account: str = ""
     ninja_character: str = ""
-    # Popular/meta builds ladder (the /build meta source). PoE2 path UNCONFIRMED — config-driven
-    # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
-    # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
-    ninja_builds_path: str = "/poe2/api/builds/overview"
+    # Popular/meta builds ladder (the /build meta source). Confirmed live 2026-07-06: the ladder
+    # is NOT one JSON endpoint — index-state (JSON) resolves the league's snapshot {version,
+    # snapshotName}, then search + dictionary answer protobuf (see ninja_meta_client for the
+    # wire-format notes). League/version are always resolved at run time, never hardcoded.
+    ninja_index_state_path: str = "/poe2/api/data/index-state"
+    ninja_builds_search_path: str = "/poe2/api/builds/{version}/search"
+    ninja_builds_dictionary_path: str = "/poe2/api/builds/dictionary/{hash}"
     ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
     ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
 

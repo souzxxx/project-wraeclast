@@ -4,13 +4,23 @@ Fills the `/build` meta source so the diff stops degrading to "not comparable" (
 Phase 0, ROADMAP P2). poe.ninja exposes a PoE2 builds ladder; we group its characters by class,
 count how often each skill gem appears, and keep the most-used ones per class as a `MetaBuild`.
 
-The AGGREGATION is pure and unit-tested offline. The live endpoint shape mirrors the public
-profile (className + skills[{name}]); the exact builds path is config-driven and confirmed in the
-deploy with `explore`, exactly like ninja_client / ninja_build_client were bootstrapped (skill
-§1/§2b: never hardcode the league/endpoint, validate with a GET, parse defensively).
+The AGGREGATION is pure and unit-tested offline. The ladder itself is served as protobuf
+(`application/x-protobuf`), confirmed live 2026-07-06 by reading poe.ninja's own frontend:
+
+    GET /poe2/api/data/index-state                     # JSON; snapshotVersions[] maps league
+                                                       # name -> {version, snapshotName}
+    GET /poe2/api/builds/{version}/search?overview=<snapshotName>
+                                                       # protobuf; per-character columns
+                                                       # (class/skills as dictionary indices)
+                                                       # + content hashes of the dictionaries
+    GET /poe2/api/builds/dictionary/<hash>             # protobuf; position -> display name
+
+We decode the wire format directly (varint + length-delimited fields only) instead of shipping
+generated protobuf stubs: the three shapes we touch are tiny, and every field is parsed
+defensively (unknown fields skipped, out-of-range indices dropped).
 
 CLI:
-    python -m collector.ninja_meta_client explore   # dump the raw builds payload, no DB writes
+    python -m collector.ninja_meta_client explore   # dump the decoded ladder, no DB writes
     python -m collector.ninja_meta_client run        # aggregate per class + write meta_build
 """
 
@@ -29,17 +39,146 @@ from db.models import MetaBuild
 CACHE_TTL = 6 * 3600  # builds ladder is a daily-ish snapshot; don't hammer (skill §1).
 
 
-def extract_characters(payload: Any) -> list[dict[str, Any]]:
-    """Pull the character list out of a builds payload, defensively. Accepts a bare list or a
-    dict carrying the list under a common key (PoE2 shape unconfirmed — tolerate variants)."""
-    if isinstance(payload, list):
-        return [c for c in payload if isinstance(c, dict)]
-    if isinstance(payload, dict):
-        for key in ("characters", "accounts", "data", "entries"):
-            value = payload.get(key)
-            if isinstance(value, list):
-                return [c for c in value if isinstance(c, dict)]
-    return []
+# ── protobuf wire-format decoding (pure) ──────────────────────────────────────
+
+
+def _read_varint(buf: bytes, i: int) -> tuple[int, int]:
+    value = shift = 0
+    while True:
+        byte = buf[i]
+        i += 1
+        value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return value, i
+        shift += 7
+
+
+def _wire_fields(buf: bytes) -> list[tuple[int, int, Any]]:
+    """Decode one protobuf message into (field_number, wire_type, value) tuples.
+
+    value is an int for wire type 0 (varint) and bytes for types 2/5/1 (length-delimited and
+    fixed 32/64). Raises ValueError/IndexError on malformed input — callers treat that as
+    "not the shape we expected" and degrade."""
+    i = 0
+    out: list[tuple[int, int, Any]] = []
+    while i < len(buf):
+        tag, i = _read_varint(buf, i)
+        field, wire = tag >> 3, tag & 7
+        if wire == 0:
+            value, i = _read_varint(buf, i)
+        elif wire == 2:
+            length, i = _read_varint(buf, i)
+            value = buf[i : i + length]
+            i += length
+        elif wire == 5:
+            value = buf[i : i + 4]
+            i += 4
+        elif wire == 1:
+            value = buf[i : i + 8]
+            i += 8
+        else:
+            raise ValueError(f"unsupported wire type {wire}")
+        out.append((field, wire, value))
+    return out
+
+
+def _packed_varints(buf: bytes) -> list[int]:
+    i = 0
+    out: list[int] = []
+    while i < len(buf):
+        value, i = _read_varint(buf, i)
+        out.append(value)
+    return out
+
+
+def parse_dictionary(buf: bytes) -> list[str]:
+    """Dictionary message: field 1 = id, repeated field 2 = values. A value's position in the
+    list IS the index the search columns reference."""
+    return [
+        value.decode("utf-8", "replace")
+        for field, wire, value in _wire_fields(buf)
+        if field == 2 and wire == 2
+    ]
+
+
+def _decode_row(buf: bytes) -> dict[str, Any]:
+    """One per-character cell: field 1 = string, field 2 = number, field 3 = index list
+    (packed or repeated). proto3 omits defaults, so an empty cell means index/number 0."""
+    out: dict[str, Any] = {"str": None, "num": 0, "nums": []}
+    for field, wire, value in _wire_fields(buf):
+        if field == 1 and wire == 2:
+            out["str"] = value.decode("utf-8", "replace")
+        elif field == 2 and wire == 0:
+            out["num"] = value
+        elif field == 3 and wire == 2:
+            out["nums"] = _packed_varints(value)
+        elif field == 3 and wire == 0:
+            out["nums"].append(value)
+    return out
+
+
+def parse_search(buf: bytes) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str]]:
+    """Search response: root field 1 = result; result field 5 = per-character columns
+    ({1: column id, repeated 2: row cell}), field 6 = dictionary refs ({1: name, 2: hash}).
+
+    Returns (columns, dictionary_hashes); columns maps column id -> decoded row cells."""
+    columns: dict[str, list[dict[str, Any]]] = {}
+    hashes: dict[str, str] = {}
+    results = [v for f, w, v in _wire_fields(buf) if f == 1 and w == 2]
+    for result in results:
+        for field, wire, value in _wire_fields(result):
+            if wire != 2:
+                continue
+            if field == 5:
+                sub = _wire_fields(value)
+                ids = [v for f, w, v in sub if f == 1 and w == 2]
+                if not ids:
+                    continue
+                column_id = ids[0].decode("utf-8", "replace")
+                columns[column_id] = [_decode_row(v) for f, w, v in sub if f == 2 and w == 2]
+            elif field == 6:
+                sub = _wire_fields(value)
+                name = next((v for f, w, v in sub if f == 1 and w == 2), None)
+                digest = next((v for f, w, v in sub if f == 2 and w == 2), None)
+                if name and digest:
+                    hashes[name.decode("utf-8", "replace")] = digest.decode("utf-8", "replace")
+    return columns, hashes
+
+
+def resolve_snapshot(index_state: Any, league: str) -> dict[str, str] | None:
+    """Find the league's builds snapshot in the index-state JSON (matched by display name,
+    case-insensitive). Returns {"version", "snapshotName"} or None if the league isn't listed."""
+    if not isinstance(index_state, dict):
+        return None
+    for entry in index_state.get("snapshotVersions") or []:
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("name", "")).casefold() != league.casefold():
+            continue
+        version, snapshot_name = entry.get("version"), entry.get("snapshotName")
+        if version and snapshot_name:
+            return {"version": str(version), "snapshotName": str(snapshot_name)}
+    return None
+
+
+def build_characters(
+    columns: dict[str, list[dict[str, Any]]],
+    class_names: list[str],
+    gem_names: list[str],
+) -> list[dict[str, Any]]:
+    """Join the search columns with the dictionaries into the {className, skills:[{name}]}
+    shape the aggregation consumes. Out-of-range indices are dropped, not guessed."""
+    class_rows = columns.get("class", [])
+    skill_rows = columns.get("skills", [])
+    chars: list[dict[str, Any]] = []
+    for i, cell in enumerate(class_rows):
+        index = cell["num"]
+        if not 0 <= index < len(class_names):
+            continue
+        gem_indices = skill_rows[i]["nums"] if i < len(skill_rows) else []
+        gems = [gem_names[g] for g in gem_indices if 0 <= g < len(gem_names)]
+        chars.append({"className": class_names[index], "skills": [{"name": g} for g in gems]})
+    return chars
 
 
 def _char_class(char: dict[str, Any]) -> str | None:
@@ -118,15 +257,36 @@ def aggregate_meta_builds(
     return out
 
 
-async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
-    settings = settings or get_settings()
+async def _fetch_characters(settings: Settings) -> list[dict[str, Any]]:
+    """index-state -> search -> dictionaries -> joined character dicts (network layer)."""
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await http.get_json(
-            settings.ninja_builds_path,
-            params={"league": settings.poe2_league},
+        index_state = await http.get_json(settings.ninja_index_state_path, cache_ttl=CACHE_TTL)
+        snapshot = resolve_snapshot(index_state, settings.poe2_league)
+        if snapshot is None:
+            raise RuntimeError(
+                f"league {settings.poe2_league!r} not found in poe.ninja index-state"
+            )
+        raw = await http.get_bytes(
+            settings.ninja_builds_search_path.format(version=snapshot["version"]),
+            params={"overview": snapshot["snapshotName"]},
             cache_ttl=CACHE_TTL,
         )
-    chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
+        columns, hashes = parse_search(raw)
+        dictionaries: dict[str, list[str]] = {}
+        for name in ("class", "gem"):
+            digest = hashes.get(name)
+            if not digest:
+                raise RuntimeError(f"poe.ninja search response has no {name!r} dictionary")
+            buf = await http.get_bytes(
+                settings.ninja_builds_dictionary_path.format(hash=digest), cache_ttl=CACHE_TTL
+            )
+            dictionaries[name] = parse_dictionary(buf)
+    return build_characters(columns, dictionaries["class"], dictionaries["gem"])
+
+
+async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
+    settings = settings or get_settings()
+    chars = (await _fetch_characters(settings))[: settings.ninja_meta_max_chars]
     source = {"url": settings.ninja_base_url + "/poe2/builds", "title": "poe.ninja builds"}
     return aggregate_meta_builds(
         chars, settings.poe2_league, min_usage=settings.ninja_meta_min_usage, source=source
@@ -145,13 +305,10 @@ async def run() -> int:
 
 
 async def explore() -> None:
-    """GET the configured builds endpoint and dump raw JSON — confirm shape before modeling."""
+    """Run the full index-state -> search -> dictionary chain and dump the decoded characters —
+    confirms the wire format against the live deploy before/after a poe.ninja change."""
     settings = get_settings()
-    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        data = await http.get_json(
-            settings.ninja_builds_path, params={"league": settings.poe2_league}
-        )
-    chars = extract_characters(data)
+    chars = await _fetch_characters(settings)
     print(f"characters found: {len(chars)}")
     print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
 

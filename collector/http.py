@@ -133,6 +133,26 @@ class HttpClient:
             self._cache.set(cache_key, data, cache_ttl)
         return data
 
+    async def get_bytes(
+        self, url: str, *, params: dict[str, Any] | None = None, cache_ttl: float = 0
+    ) -> bytes:
+        """GET a binary body — poe.ninja's builds endpoints answer protobuf, not JSON."""
+        cache_key = f"GET-BYTES {url} {json.dumps(params, sort_keys=True)}" if cache_ttl else ""
+        if cache_key:
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        await self._rl.before_request()
+        resp = await self._client.get(url, params=params)
+        self._rl.observe(resp.headers)
+        resp.raise_for_status()
+        data = resp.content
+
+        if cache_key:
+            self._cache.set(cache_key, data, cache_ttl)
+        return data
+
     async def post_json(
         self, url: str, *, json_body: dict[str, Any] | None = None
     ) -> Any:

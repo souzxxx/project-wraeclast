@@ -81,6 +81,23 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-06** — P0 health: fix `step meta_builds FAILED: 404` — the follow-up flagged in the
+  entry below. Live exploration of poe.ninja's own frontend bundle found the real PoE2 ladder:
+  there is no single JSON builds endpoint. The flow is `GET /poe2/api/data/index-state` (JSON;
+  maps league display name → snapshot `{version, snapshotName}`), then
+  `GET /poe2/api/builds/{version}/search?overview=<snapshotName>` and
+  `GET /poe2/api/builds/dictionary/<hash>` — both answering **protobuf**
+  (`application/x-protobuf`), with per-character class/skills encoded as indices into
+  content-hashed dictionaries. `ninja_meta_client` now carries a minimal pure wire-format
+  decoder (varint + length-delimited only, unknown fields skipped, out-of-range indices
+  dropped) instead of generated stubs; `HttpClient` gained `get_bytes` (same TTL-cache and
+  rate-limit path as `get_json`). The aggregation layer is untouched — the decoded rows join
+  into the same `{className, skills:[{name}]}` shape. Config now holds the three confirmed
+  paths (league/version still resolved at run time, never hardcoded). Verified live:
+  `explore` decodes 100 ladder characters; full `fetch_popular_builds` yields 13 class metas
+  for the current league, including the owner's class. +13 offline tests (synthetic wire
+  payloads mirror the confirmed shapes; fail-loud tests for missing league/dictionary);
+  −3 obsolete JSON-shape tests. ruff clean; `pytest -q` 350 → 355.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
