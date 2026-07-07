@@ -170,8 +170,82 @@ async def test_explore_dumps_character_count_and_sample(capsys):
     respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json=payload))
     await explore()
     out = capsys.readouterr().out
-    assert "characters found: 2" in out
+    assert "2 characters" in out  # per-candidate status line
     assert "Comet" in out  # first chars sampled into the JSON dump
+
+
+ALT_URL = "https://poe.ninja/poe2/api/builds/0/overview"
+
+
+@respx.mock
+async def test_fetch_falls_through_to_next_candidate_on_404():
+    # first candidate 404s (the current unconfirmed default); the second, added via env, works.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Witch", "Comet", "Frostbolt") for _ in range(3)]}
+    alt = respx.get(ALT_URL).mock(return_value=httpx.Response(200, json=payload))
+    settings = Settings(
+        ninja_builds_path="/poe2/api/builds/overview,/poe2/api/builds/0/overview"
+    )
+    [build] = await fetch_popular_builds(settings)
+    assert alt.called
+    assert build.char_class == "Witch"
+
+
+@respx.mock
+async def test_fetch_prefers_candidate_with_characters_over_empty():
+    # a candidate that 200s but is empty must not shadow a later candidate that has data.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json={"characters": []}))
+    payload = {"characters": [_char("Monk", "Tempest") for _ in range(3)]}
+    respx.get(ALT_URL).mock(return_value=httpx.Response(200, json=payload))
+    settings = Settings(
+        ninja_builds_path="/poe2/api/builds/overview,/poe2/api/builds/0/overview"
+    )
+    [build] = await fetch_popular_builds(settings)
+    assert build.char_class == "Monk"
+
+
+@respx.mock
+async def test_fetch_returns_empty_for_valid_but_empty_ladder_without_raising():
+    # every candidate 200s but the ladder is genuinely empty -> no builds, but NOT a failure.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json={"characters": []}))
+    assert await fetch_popular_builds(Settings()) == []
+
+
+@respx.mock
+async def test_fetch_raises_when_every_candidate_errors():
+    # all candidates 404 -> raise so run_daily records a loud failure (skill §1), never silent.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    respx.get(ALT_URL).mock(return_value=httpx.Response(404))
+    settings = Settings(
+        ninja_builds_path="/poe2/api/builds/overview,/poe2/api/builds/0/overview"
+    )
+    try:
+        await fetch_popular_builds(settings)
+    except RuntimeError as exc:
+        assert "no poe.ninja builds endpoint responded" in str(exc)
+        assert "/poe2/api/builds/overview" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError when all candidates error")
+
+
+@respx.mock
+async def test_explore_reports_each_candidate_status(capsys, monkeypatch):
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Witch", "Comet")]}
+    respx.get(ALT_URL).mock(return_value=httpx.Response(200, json=payload))
+    settings = Settings(
+        ninja_builds_path="/poe2/api/builds/overview,/poe2/api/builds/0/overview"
+    )
+    monkeypatch.setattr(nmc, "get_settings", lambda: settings)
+    await explore()
+    out = capsys.readouterr().out
+    assert "/poe2/api/builds/overview -> ERROR" in out
+    assert "/poe2/api/builds/0/overview -> 1 characters" in out
+
+
+def test_settings_splits_builds_candidates():
+    s = Settings(ninja_builds_path=" /a , /b ,, /c ")
+    assert s.ninja_builds_path_list == ["/a", "/b", "/c"]
 
 
 def test_main_dispatches_run(monkeypatch):

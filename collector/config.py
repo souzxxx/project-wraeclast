@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # Popular/meta builds ladder (the /build meta source). PoE2 path UNCONFIRMED — config-driven
     # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
     # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
+    # Accepts a COMMA-SEPARATED list of candidate paths (like `ninja_economy_types`): the client
+    # tries each in order and self-selects the first that responds with characters, so the deploy
+    # can recover the endpoint via env alone — no code change — once `explore` reveals the live one.
     ninja_builds_path: str = "/poe2/api/builds/overview"
     ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
     ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
@@ -99,6 +102,13 @@ class Settings(BaseSettings):
     @property
     def rss_feed_list(self) -> list[str]:
         return [f.strip() for f in self.rss_feeds.split(",") if f.strip()]
+
+    @property
+    def ninja_builds_path_list(self) -> list[str]:
+        """Candidate builds endpoints, tried in order until one returns characters. The PoE2
+        builds path is UNCONFIRMED; a comma-separated env lets the deploy add candidates and
+        self-select the working one without a code change (skill §1: validate with a GET)."""
+        return [p.strip() for p in self.ninja_builds_path.split(",") if p.strip()]
 
     @property
     def ninja_economy_category_list(self) -> list[tuple[str, str]]:
