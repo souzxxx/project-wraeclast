@@ -81,6 +81,27 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-07** — P0 health: make the daily `meta_builds` step **recoverable from its 404 without a
+  code deploy**. The 2026-07-06 note flagged `step meta_builds FAILED: 404` on the unconfirmed PoE2
+  builds endpoint (`/poe2/api/builds/overview`) as ongoing — so `/build` degrades to "not comparable"
+  every day. Confirming the real path still needs a live GET (can't be done offline, and I won't
+  hardcode a guessed endpoint — skill §1), but recovering *was* a code-change-+-PR-+-merge round trip.
+  This turns it into an env edit: `ninja_builds_path` is now a **comma-separated candidate list**
+  (mirroring `ninja_economy_types`) with a new `ninja_builds_path_list` property. New
+  `_fetch_builds_chars` tries each candidate in order and self-selects the first that returns
+  characters, preferring a populated response but accepting a valid-but-empty ladder (no false
+  failure early in a league) and raising a `RuntimeError` naming every tried path only when ALL
+  candidates error — so the step stays **loudly red** when genuinely unreachable (preserving the
+  2026-07-04 surfacing), never silently green. `explore` now probes every candidate and prints a
+  per-path status line (`-> N characters` / `-> ERROR <type>`) plus a JSON sample from the winner,
+  so one `python -m collector.ninja_meta_client explore` in the deploy reveals the live path to set
+  via `NINJA_BUILDS_PATH`. Default stays the single current path — behavior is identical until the
+  owner adds candidates, so no guessed endpoint enters the write path. +6 offline tests
+  (respx: 404 fall-through to a working candidate, populated-over-empty preference, empty-ladder →
+  `[]` without raising, all-candidates-error → `RuntimeError`, per-candidate `explore` reporting,
+  and the config split). ruff clean; `pytest -q` 350 → 356. No schema change, no league hardcoding.
+  **Still needs a live follow-up (out of scope offline):** run `explore` against the deploy to
+  discover and set the actual working PoE2 builds path — this PR makes that a one-command, env-only fix.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand

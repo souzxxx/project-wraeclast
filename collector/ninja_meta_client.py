@@ -22,6 +22,8 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any
 
+import httpx
+
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
 from db.models import MetaBuild
@@ -118,15 +120,42 @@ def aggregate_meta_builds(
     return out
 
 
+async def _fetch_builds_chars(
+    http: HttpClient, settings: Settings
+) -> tuple[str, list[dict[str, Any]]]:
+    """Try each configured builds-path candidate in order; return `(path, characters)` for the
+    first that responds without an HTTP error.
+
+    Prefer a candidate that actually yields characters, but accept a valid-but-empty response
+    (a legitimately empty early-league ladder) rather than treating it as a failure. Raise only
+    when EVERY candidate errors (e.g. all 404) — that keeps the daily step loudly red when the
+    endpoint is genuinely unreachable (skill §1) instead of silently writing zero builds."""
+    empty_hit: str | None = None
+    errors: list[str] = []
+    for path in settings.ninja_builds_path_list:
+        try:
+            payload = await http.get_json(
+                path, params={"league": settings.poe2_league}, cache_ttl=CACHE_TTL
+            )
+        except httpx.HTTPError as exc:
+            errors.append(f"{path} ({exc.__class__.__name__})")
+            continue
+        chars = extract_characters(payload)
+        if chars:
+            return path, chars
+        if empty_hit is None:
+            empty_hit = path
+    if empty_hit is not None:
+        return empty_hit, []
+    tried = ", ".join(errors or ["<none configured>"])
+    raise RuntimeError(f"no poe.ninja builds endpoint responded; tried {tried}")
+
+
 async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
     settings = settings or get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await http.get_json(
-            settings.ninja_builds_path,
-            params={"league": settings.poe2_league},
-            cache_ttl=CACHE_TTL,
-        )
-    chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
+        _path, chars = await _fetch_builds_chars(http, settings)
+    chars = chars[: settings.ninja_meta_max_chars]
     source = {"url": settings.ninja_base_url + "/poe2/builds", "title": "poe.ninja builds"}
     return aggregate_meta_builds(
         chars, settings.poe2_league, min_usage=settings.ninja_meta_min_usage, source=source
@@ -145,15 +174,27 @@ async def run() -> int:
 
 
 async def explore() -> None:
-    """GET the configured builds endpoint and dump raw JSON — confirm shape before modeling."""
+    """Probe every configured builds-path candidate and report which one returns characters —
+    the fastest way to confirm the (unconfirmed) PoE2 builds endpoint in the deploy. Dumps a JSON
+    sample from the first candidate that yields characters, so the owner can set NINJA_BUILDS_PATH
+    to the winner (skill §1: confirm shape with a GET before modeling)."""
     settings = get_settings()
+    winner: list[dict[str, Any]] = []
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        data = await http.get_json(
-            settings.ninja_builds_path, params={"league": settings.poe2_league}
-        )
-    chars = extract_characters(data)
-    print(f"characters found: {len(chars)}")
-    print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
+        for path in settings.ninja_builds_path_list:
+            try:
+                data = await http.get_json(path, params={"league": settings.poe2_league})
+            except httpx.HTTPError as exc:
+                print(f"  {path} -> ERROR {exc.__class__.__name__}")
+                continue
+            chars = extract_characters(data)
+            print(f"  {path} -> {len(chars)} characters")
+            if chars and not winner:
+                winner = chars
+    if winner:
+        print(json.dumps(winner[:3], indent=2, ensure_ascii=False)[:4000])
+    else:
+        print("no candidate returned characters; set NINJA_BUILDS_PATH to a working endpoint")
 
 
 def _main(argv: list[str]) -> int:
