@@ -2,12 +2,14 @@
 (fetch/run/explore/_main, mocked with respx + monkeypatch — no DB, no live network)."""
 
 import httpx
+import pytest
 import respx
 
 import collector.ninja_meta_client as nmc
 from api.build_diff import compute_build_diff
 from collector.config import Settings
 from collector.ninja_meta_client import (
+    NinjaBuildsUnavailable,
     _char_class,
     _char_gems,
     _main,
@@ -19,6 +21,8 @@ from collector.ninja_meta_client import (
 )
 
 BUILDS_URL = "https://poe.ninja/poe2/api/builds/overview"
+# First configured fallback, tried when the preferred path yields nothing (see config).
+FALLBACK_URL = "https://poe.ninja/poe2/api/builds/0/overview"
 
 
 def _char(cls, *gems):
@@ -189,3 +193,74 @@ def test_main_dispatches_explore(monkeypatch):
 
 def test_main_unknown_command_returns_2():
     assert _main(["prog", "bogus"]) == 2
+
+
+def test_builds_path_list_prefers_primary_then_fallbacks_deduped():
+    s = Settings(
+        ninja_builds_path="/a", ninja_builds_fallback_paths="/b, /a ,,/c"
+    )
+    # primary first, fallbacks in order, the duplicate /a and the empty entry dropped
+    assert s.ninja_builds_path_list == ["/a", "/b", "/c"]
+
+
+@respx.mock
+async def test_fetch_popular_builds_falls_back_when_primary_404s():
+    # the preferred path 404s (the current production symptom); the next candidate serves the data.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Witch", "Comet", "Frostbolt") for _ in range(3)]}
+    fallback = respx.get(FALLBACK_URL).mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(Settings())
+    assert fallback.called
+    assert build.char_class == "Witch"
+    assert [g["name"] for g in build.gems] == ["Comet", "Frostbolt"]
+
+
+@respx.mock
+async def test_fetch_popular_builds_skips_empty_payload_and_uses_next_with_characters():
+    # a 200 with zero characters is not "found" — the client moves on to the next candidate.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json={"characters": []}))
+    payload = {"characters": [_char("Monk", "Tempest") for _ in range(3)]}
+    respx.get(FALLBACK_URL).mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(Settings())
+    assert build.char_class == "Monk"
+
+
+@respx.mock
+async def test_fetch_popular_builds_raises_actionable_error_when_all_paths_fail():
+    # every candidate 404s -> raise listing the paths tried, so the daily run goes red with a
+    # diagnostic (not a bare 404) and the failure-surfacing contract still holds.
+    respx.get(url__regex=r".*").mock(return_value=httpx.Response(404))
+    with pytest.raises(NinjaBuildsUnavailable) as excinfo:
+        await fetch_popular_builds(Settings())
+    msg = str(excinfo.value)
+    assert "/poe2/api/builds/overview -> HTTP 404" in msg
+    assert "explore" in msg  # points the owner at the route-finding CLI
+
+
+@respx.mock
+async def test_fetch_popular_builds_tries_next_on_transport_error():
+    # a non-status HTTP error (timeout/transport) is also swallowed per-candidate, not fatal.
+    respx.get(BUILDS_URL).mock(side_effect=httpx.ConnectError("boom"))
+    payload = {"characters": [_char("Witch", "Comet") for _ in range(3)]}
+    respx.get(FALLBACK_URL).mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(Settings())
+    assert build.char_class == "Witch"
+
+
+@respx.mock
+async def test_explore_reports_working_endpoint(capsys):
+    payload = {"characters": [_char("Witch", "Comet"), _char("Monk", "Tempest")]}
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json=payload))
+    await explore()
+    out = capsys.readouterr().out
+    assert "builds endpoint: /poe2/api/builds/overview" in out
+    assert "characters found: 2" in out
+
+
+@respx.mock
+async def test_explore_reports_all_paths_failed(capsys):
+    respx.get(url__regex=r".*").mock(return_value=httpx.Response(404))
+    await explore()
+    captured = capsys.readouterr()
+    assert captured.out == ""  # nothing dumped when no route works
+    assert "no poe.ninja builds endpoint returned characters" in captured.err

@@ -22,11 +22,20 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any
 
+import httpx
+
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
 from db.models import MetaBuild
 
 CACHE_TTL = 6 * 3600  # builds ladder is a daily-ish snapshot; don't hammer (skill §1).
+
+
+class NinjaBuildsUnavailable(RuntimeError):
+    """No configured poe.ninja builds endpoint returned characters. Carries the exact paths +
+    statuses tried so the daily run goes red with an actionable message (run_daily surfacing,
+    Done 2026-07-04) instead of a bare `404` — the owner can then confirm the route with
+    `python -m collector.ninja_meta_client explore` rather than guessing."""
 
 
 def extract_characters(payload: Any) -> list[dict[str, Any]]:
@@ -118,14 +127,37 @@ def aggregate_meta_builds(
     return out
 
 
+async def _fetch_builds_payload(http: HttpClient, settings: Settings) -> tuple[str, Any]:
+    """Try each configured builds path in order; return (path, payload) for the FIRST that yields
+    characters. A 404/HTTP error or an empty-character payload just moves on to the next candidate.
+    Raises `NinjaBuildsUnavailable` listing every attempt if none work (the PoE2 route is
+    unconfirmed — see config), so the failure is actionable, not a mystery 404."""
+    attempts: list[str] = []
+    for path in settings.ninja_builds_path_list:
+        try:
+            payload = await http.get_json(
+                path, params={"league": settings.poe2_league}, cache_ttl=CACHE_TTL
+            )
+        except httpx.HTTPStatusError as exc:
+            attempts.append(f"{path} -> HTTP {exc.response.status_code}")
+            continue
+        except httpx.HTTPError as exc:  # transport/timeout/etc. — try the next candidate
+            attempts.append(f"{path} -> {type(exc).__name__}")
+            continue
+        if extract_characters(payload):
+            return path, payload
+        attempts.append(f"{path} -> 0 characters")
+    raise NinjaBuildsUnavailable(
+        "no poe.ninja builds endpoint returned characters; tried: "
+        + "; ".join(attempts)
+        + " (run `python -m collector.ninja_meta_client explore` in the deploy to find the route)"
+    )
+
+
 async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
     settings = settings or get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await http.get_json(
-            settings.ninja_builds_path,
-            params={"league": settings.poe2_league},
-            cache_ttl=CACHE_TTL,
-        )
+        _path, payload = await _fetch_builds_payload(http, settings)
     chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
     source = {"url": settings.ninja_base_url + "/poe2/builds", "title": "poe.ninja builds"}
     return aggregate_meta_builds(
@@ -145,13 +177,18 @@ async def run() -> int:
 
 
 async def explore() -> None:
-    """GET the configured builds endpoint and dump raw JSON — confirm shape before modeling."""
+    """Try each configured builds endpoint until one yields characters, then dump raw JSON —
+    confirm the PoE2 route + shape before modeling. Reports which candidate worked (or, if none
+    did, every path + status tried) so the owner can pin `ninja_builds_path` via env."""
     settings = get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        data = await http.get_json(
-            settings.ninja_builds_path, params={"league": settings.poe2_league}
-        )
+        try:
+            path, data = await _fetch_builds_payload(http, settings)
+        except NinjaBuildsUnavailable as exc:
+            print(str(exc), file=sys.stderr)
+            return
     chars = extract_characters(data)
+    print(f"builds endpoint: {path}")
     print(f"characters found: {len(chars)}")
     print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
 

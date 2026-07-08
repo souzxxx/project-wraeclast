@@ -69,8 +69,16 @@ class Settings(BaseSettings):
     ninja_character: str = ""
     # Popular/meta builds ladder (the /build meta source). PoE2 path UNCONFIRMED — config-driven
     # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
-    # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
+    # other ninja endpoints were bootstrapped. `ninja_builds_path` is the preferred candidate;
+    # `ninja_builds_fallback_paths` (ordered, comma-separated) are tried in turn until one returns
+    # characters, so a single wrong guess no longer reds the whole daily run. The confirmed economy
+    # endpoint is `/poe2/api/economy/exchange/0/overview`, so PoE2 uses a `/poe2/api/<domain>/[n/]
+    # overview` shape — the fallbacks mirror it. Override either via env. League-param driven, never
+    # hardcoded; if none work the client raises listing every path tried (see run_daily surfacing).
     ninja_builds_path: str = "/poe2/api/builds/overview"
+    ninja_builds_fallback_paths: str = (
+        "/poe2/api/builds/0/overview,/poe2/api/build/overview,/poe2/api/data/builds"
+    )
     ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
     ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
 
@@ -111,6 +119,18 @@ class Settings(BaseSettings):
             if ninja_type:
                 pairs.append((ninja_type, item_type.strip() or "currency"))
         return pairs
+
+    @property
+    def ninja_builds_path_list(self) -> list[str]:
+        """Ordered builds-endpoint candidates: the preferred path first, then the configured
+        fallbacks, deduped preserving order. The meta client tries each until one returns
+        characters (empty entries dropped)."""
+        raw = [self.ninja_builds_path, *self.ninja_builds_fallback_paths.split(",")]
+        ordered: list[str] = []
+        for path in (p.strip() for p in raw):
+            if path and path not in ordered:
+                ordered.append(path)
+        return ordered
 
     # ── GGG OAuth (Phase 2, optional) ──
     ggg_client_id: str = ""
