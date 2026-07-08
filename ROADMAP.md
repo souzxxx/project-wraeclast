@@ -81,6 +81,27 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-08** (#40) — P0 health: make the one persistently-failing daily step (`meta_builds`)
+  resilient + self-diagnosing. Since it shipped (2026-06-22) the step has 404'd **every run** —
+  its poe.ninja builds path is a single unconfirmed guess (`/poe2/api/builds/overview`), and since
+  2026-07-04 that hard-fails the run with a bare `step meta_builds FAILED: 404`, nothing
+  actionable. Root fix for the finding-the-route problem, done the same config-driven way the other
+  ninja endpoints were bootstrapped: `fetch_popular_builds`/`explore` now try an **ordered list of
+  candidate paths** (`ninja_builds_path` preferred, then `ninja_builds_fallback_paths` — PoE2-shaped
+  alternates mirroring the confirmed economy endpoint `/poe2/api/economy/exchange/0/overview`),
+  returning the FIRST that yields characters. A 404/transport error or an empty-character payload
+  just advances to the next candidate; only when **all** fail does it raise the new
+  `NinjaBuildsUnavailable`, whose message lists every path + status tried and points at
+  `python -m collector.ninja_meta_client explore`. This preserves the red-run failure-surfacing
+  contract (Done 2026-07-04) while turning a mystery 404 into a one-shot route diagnosis, and gives
+  the deploy a real chance to self-heal without a human guessing. `explore` now reports which
+  candidate worked. New `Settings.ninja_builds_path_list` (preferred-first, deduped, empties
+  dropped). All config-driven; no league/endpoint hardcoded beyond the documented candidates, which
+  are env-overridable. +7 offline tests (respx: primary-404 → fallback, empty-payload skip,
+  transport-error skip, all-fail actionable raise, explore success/all-fail; + the path-list
+  property). `ruff check .` clean; `pytest -q` 350 → 357. Does NOT tick the P0 "no step silently
+  failing" box — the exact live route is still unconfirmed (needs one `explore` run in the deploy),
+  but that run is now trivial and the interim failure is loud + actionable instead of a bare 404.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
