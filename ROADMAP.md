@@ -81,7 +81,7 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
-- **2026-07-08** — P0 health: make the one persistently-failing daily step (`meta_builds`)
+- **2026-07-08** (#40) — P0 health: make the one persistently-failing daily step (`meta_builds`)
   resilient + self-diagnosing. Since it shipped (2026-06-22) the step has 404'd **every run** —
   its poe.ninja builds path is a single unconfirmed guess (`/poe2/api/builds/overview`), and since
   2026-07-04 that hard-fails the run with a bare `step meta_builds FAILED: 404`, nothing
