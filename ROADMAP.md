@@ -81,6 +81,22 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-09** — P3 coverage: harden `collector/curate.py` (74% → 99% — clears the 80% bar).
+  This is the project's #1 pillar (the GLM farm-ranking that feeds `/farm`, the daily report, and
+  chat RAG), yet the whole defensive/coercion layer that keeps the pipeline resilient to unpredictable
+  LLM output was untested — the earlier "every module clears the 80% bar" claim silently excluded it
+  (along with `add_knowledge.py` / `rss_client.py`, still sub-80% and noted for a future run). Added
+  offline tests (no DB, no network, `glm_chat` monkeypatched) for exactly those gaps: the field
+  coercions that absorb LLM drift (`_coerce_float` pulling the leading number out of `"20 divine"`/
+  `"~6 min"`, a non-numeric string degrading to `0.0` not a validation error, `null` optionals staying
+  `None`; `_normalize_risk` low/high/med/empty/None; the `sources` validator passing dicts through and
+  turning a non-list into `[]`); `parse_llm_json` robustness (isolating the object after leading prose,
+  accepting a bare list of strategies, and raising `ValueError` on valid-JSON-but-wrong-schema);
+  `_price_value`'s PoE1-style chaos fallback when `divine_value` is absent (+ the no-price row dropped);
+  `to_markdown` rendering ranked strategies with and without a summary/risk/investment; and the
+  `curate()` + `run()` + `_recent_knowledge()` wiring (system/user turns and pinned `temperature=0.3`
+  passed to GLM; prices+knowledge fetched, strategies persisted; the `knowledge_chunk` query). No
+  production code changed — tests only. +19 offline tests (350 → 369); ruff clean.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
