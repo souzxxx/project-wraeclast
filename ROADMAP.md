@@ -81,6 +81,24 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-10** — P3 coverage: harden `collector/curate.py` (74% → 99% — clears the 80% bar).
+  The core GLM farm-ranking curation (the heart of Fase 0) was the highest-value module still
+  under the line the P3 "every module clears 80%" note had claimed complete: only its pure formula
+  and a few `parse_llm_json` happy paths were tested, while the lenient `_LLMStrategy` validators,
+  the JSON defensive branches, the markdown renderer, and the `curate`/`run` wiring had no coverage.
+  Added offline tests (no network, no DB) following the established pattern: the field coercers
+  (`_coerce_float` pulling a leading number from `"20 divine"`, junk → 0.0, and an explicit `null`
+  preserved as `None`; risk normalization low/high/med/empty; the `sources` validator collapsing a
+  non-list to `[]` and keeping dict entries); `parse_llm_json`'s defensive paths (prose stripped
+  before the object, a bare list wrapped into `{"strategies": …}`, and valid-JSON-that-breaks-schema
+  → `ValueError`); `_price_value`'s chaos fallback in `build_user_prompt`; the `to_markdown`
+  ranked-entry rendering with summary/risk/investment; and the `curate`/`run` seams with `glm_chat`
+  monkeypatched and `db.repo`/`db.connection` deferred imports patched at call time — asserting the
+  computed-not-free-text profit contract and the read-knowledge → persist-strategies wiring. No
+  production code changed — tests only. +13 offline tests (350 → 363); `curate.py` now at 99%
+  (only the `__main__` guard remains). ruff clean. Corrects the earlier "every module clears 80%"
+  claim, which had overlooked `curate.py`, `rss_client.py` (70%), and `add_knowledge.py` (60%);
+  the latter two remain the next coverage targets.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
