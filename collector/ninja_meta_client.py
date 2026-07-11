@@ -22,11 +22,18 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any
 
+import httpx
+
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
 from db.models import MetaBuild
 
 CACHE_TTL = 6 * 3600  # builds ladder is a daily-ish snapshot; don't hammer (skill §1).
+
+
+class NoBuildsEndpoint(RuntimeError):
+    """None of the configured builds paths returned any characters. Carries every path tried
+    (and its outcome) so the daily run's failure line points straight at what to fix."""
 
 
 def extract_characters(payload: Any) -> list[dict[str, Any]]:
@@ -118,15 +125,41 @@ def aggregate_meta_builds(
     return out
 
 
+async def _probe_characters(
+    http: HttpClient, paths: list[str], league: str, *, cache_ttl: float, limit: int
+) -> tuple[str, list[dict[str, Any]]]:
+    """Try each candidate builds path in order; return (winning_path, characters) for the first
+    that yields any character. A 404 (or any HTTP error) on one candidate falls through to the
+    next — the PoE2 builds route is unconfirmed, so the collector self-heals onto whichever path
+    poe.ninja actually serves. Raises NoBuildsEndpoint (listing every attempt) if none work."""
+    attempts: list[str] = []
+    for path in paths:
+        try:
+            payload = await http.get_json(
+                path, params={"league": league}, cache_ttl=cache_ttl
+            )
+        except httpx.HTTPStatusError as exc:
+            attempts.append(f"{path} -> HTTP {exc.response.status_code}")
+            continue
+        chars = extract_characters(payload)[:limit]
+        if chars:
+            return path, chars
+        attempts.append(f"{path} -> 0 characters")
+    raise NoBuildsEndpoint(
+        "no poe.ninja builds path returned characters; tried: " + "; ".join(attempts)
+    )
+
+
 async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
     settings = settings or get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await http.get_json(
-            settings.ninja_builds_path,
-            params={"league": settings.poe2_league},
+        _, chars = await _probe_characters(
+            http,
+            settings.ninja_builds_path_list,
+            settings.poe2_league,
             cache_ttl=CACHE_TTL,
+            limit=settings.ninja_meta_max_chars,
         )
-    chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
     source = {"url": settings.ninja_base_url + "/poe2/builds", "title": "poe.ninja builds"}
     return aggregate_meta_builds(
         chars, settings.poe2_league, min_usage=settings.ninja_meta_min_usage, source=source
@@ -145,15 +178,22 @@ async def run() -> int:
 
 
 async def explore() -> None:
-    """GET the configured builds endpoint and dump raw JSON — confirm shape before modeling."""
+    """GET each configured builds candidate and report which one serves characters — confirm the
+    live route + shape before trusting the daily aggregate."""
     settings = get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        data = await http.get_json(
-            settings.ninja_builds_path, params={"league": settings.poe2_league}
-        )
-    chars = extract_characters(data)
-    print(f"characters found: {len(chars)}")
-    print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
+        for path in settings.ninja_builds_path_list:
+            try:
+                data = await http.get_json(path, params={"league": settings.poe2_league})
+            except httpx.HTTPStatusError as exc:
+                print(f"{path}: HTTP {exc.response.status_code}")
+                continue
+            chars = extract_characters(data)
+            print(f"{path}: characters found: {len(chars)}")
+            if chars:
+                print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
+                return
+    print("no configured builds path returned characters")
 
 
 def _main(argv: list[str]) -> int:

@@ -8,6 +8,7 @@ import collector.ninja_meta_client as nmc
 from api.build_diff import compute_build_diff
 from collector.config import Settings
 from collector.ninja_meta_client import (
+    NoBuildsEndpoint,
     _char_class,
     _char_gems,
     _main,
@@ -19,6 +20,7 @@ from collector.ninja_meta_client import (
 )
 
 BUILDS_URL = "https://poe.ninja/poe2/api/builds/overview"
+FALLBACK_URL = "https://poe.ninja/poe2/api/builds/exchange/0/overview"
 
 
 def _char(cls, *gems):
@@ -147,6 +149,54 @@ async def test_fetch_popular_builds_truncates_to_max_chars():
     assert build.sample_size == 3
 
 
+def test_ninja_builds_path_list_orders_and_dedups():
+    # primary first, then fallbacks, whitespace trimmed, blanks + duplicates dropped.
+    s = Settings(
+        ninja_builds_path="/a",
+        ninja_builds_fallback_paths=" /b , /a ,, /c ",
+    )
+    assert s.ninja_builds_path_list == ["/a", "/b", "/c"]
+
+
+@respx.mock
+async def test_fetch_falls_back_to_next_path_on_404():
+    # the primary path 404s (the standing production failure); the collector self-heals onto the
+    # configured fallback without any code change.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Witch", "Comet", "Frostbolt") for _ in range(3)]}
+    fb = respx.get(FALLBACK_URL).mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(Settings())
+    assert fb.called
+    assert build.char_class == "Witch"
+    assert [g["name"] for g in build.gems] == ["Comet", "Frostbolt"]
+
+
+@respx.mock
+async def test_fetch_skips_endpoint_that_returns_zero_characters():
+    # a 200 with an unusable shape (0 chars) is treated as a miss and the next candidate is tried.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json={"characters": []}))
+    payload = {"characters": [_char("Monk", "Tempest") for _ in range(3)]}
+    respx.get(FALLBACK_URL).mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(Settings())
+    assert build.char_class == "Monk"
+
+
+@respx.mock
+async def test_fetch_raises_no_builds_endpoint_listing_attempts():
+    # every candidate fails -> a single clear error naming each path + its outcome, so the daily
+    # run's red line points straight at what to fix (not a bare httpx 404).
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    respx.get(FALLBACK_URL).mock(return_value=httpx.Response(200, json={"characters": []}))
+    try:
+        await fetch_popular_builds(Settings())
+    except NoBuildsEndpoint as exc:
+        msg = str(exc)
+        assert "/poe2/api/builds/overview -> HTTP 404" in msg
+        assert "/poe2/api/builds/exchange/0/overview -> 0 characters" in msg
+    else:  # pragma: no cover - the call must raise
+        raise AssertionError("expected NoBuildsEndpoint")
+
+
 async def test_run_writes_meta_builds(monkeypatch, capsys):
     builds = aggregate_meta_builds([_char("Witch", "Comet")] * 3, "Runes of Aldur", min_sample=3)
 
@@ -172,6 +222,27 @@ async def test_explore_dumps_character_count_and_sample(capsys):
     out = capsys.readouterr().out
     assert "characters found: 2" in out
     assert "Comet" in out  # first chars sampled into the JSON dump
+
+
+@respx.mock
+async def test_explore_reports_each_candidate_until_one_serves(capsys):
+    # primary 404s, fallback serves -> explore prints both outcomes and dumps the winner's sample.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Witch", "Comet")]}
+    respx.get(FALLBACK_URL).mock(return_value=httpx.Response(200, json=payload))
+    await explore()
+    out = capsys.readouterr().out
+    assert "/poe2/api/builds/overview: HTTP 404" in out
+    assert "/poe2/api/builds/exchange/0/overview: characters found: 1" in out
+    assert "Comet" in out
+
+
+@respx.mock
+async def test_explore_reports_when_no_candidate_serves(capsys):
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    respx.get(FALLBACK_URL).mock(return_value=httpx.Response(404))
+    await explore()
+    assert "no configured builds path returned characters" in capsys.readouterr().out
 
 
 def test_main_dispatches_run(monkeypatch):
