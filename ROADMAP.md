@@ -81,6 +81,28 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-11** — P0 health: make the `meta_builds` collector **resilient + self-healing** instead
+  of failing every daily run. The 2026-07-06 note explicitly left `step meta_builds FAILED: 404` on
+  `/poe2/api/builds/overview` out of scope because "finding the right route can't be verified
+  offline" — but the collector was a *single hardcoded guess*, so one wrong path meant a permanent
+  red run with no path forward short of a live probe. Reframed it as a probe over a **configurable
+  candidate list**: new `Settings.ninja_builds_fallback_paths` (comma-separated, deduped/ordered
+  after the primary via the pure `ninja_builds_path_list` property) + a new `_probe_characters`
+  that tries each path in order, falls through on any HTTP error (404) OR a 200 that yields zero
+  characters, and returns the first that serves characters — so the moment ANY candidate is correct,
+  `/build` self-heals with **no code deploy**. When every candidate fails it raises a single
+  `NoBuildsEndpoint` listing each path and its outcome (`… -> HTTP 404` / `… -> 0 characters`), so
+  the daily run's red line names exactly what to fix instead of surfacing a bare httpx 404. `explore`
+  now walks the same list and reports each candidate's result, dumping the winner's sample — a
+  sharper live-diagnosis tool. Shipped one *structurally-motivated* default fallback:
+  `/poe2/api/builds/exchange/0/overview`, mirroring the CONFIRMED economy route shape
+  (`/poe2/api/economy/exchange/0/overview`); more can be added via env with zero code change.
+  Failure stays **visible** (still raises → still marks the run red, per the 2026-07-04 visibility
+  contract) — it's now self-healing and self-diagnosing, not silenced. +6 offline tests (350 → 356;
+  `ninja_meta_client.py` at 99%): the config property (order/dedup/blank-trim), 404 → fallback,
+  zero-chars → next candidate, all-fail → `NoBuildsEndpoint` message, and both new `explore`
+  branches. ruff clean. No league/secret hardcoded; the winning path is chosen at runtime from live
+  responses.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
