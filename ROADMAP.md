@@ -72,7 +72,10 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
       two 0%-coverage modules — the daily orchestrator `collector/run_daily.py` and the Obsidian
       exporter `scripts/export_obsidian.py` — are now covered offline too (95% / 98%, only the
       `__main__` guards remain), so **every module in the project clears the 80% bar** (see Done
-      2026-07-05).)_
+      2026-07-05). Correction: a coverage sweep on 2026-07-12 caught `collector/curate.py` still at
+      74% — the core farm-ranking curator slipped through — now 99% (see Done 2026-07-12). A few
+      thinner collectors remain sub-80% (`rss_client.py` 70%, `add_knowledge.py` 60%,
+      `seed_craft_methods.py` 56%) and are the next coverage targets.)_
 - [x] Tighten the YouTube queries based on which sources actually inform good guides.
       _(see Done — shipped the data-driven analyzer; the actual query edits are now a
       report-driven decision instead of guesswork.)_
@@ -81,6 +84,28 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-12** — P3 coverage: harden `collector/curate.py` (74% → 99%). A fresh coverage sweep
+  contradicted the standing "every pure/collector module clears the 80% bar" claim — the **core
+  farm-ranking curator** (GLM → `farm_strategy`, a Fase-0 Definition-of-Done module and RAG input)
+  was still at 74%, its call-level surface and several defensive branches untested. This module
+  turns raw knowledge + prices into the ranked farms the site and chat both surface, so a regression
+  here silently degrades the product's headline feature. Added offline tests (no DB, no network,
+  no GLM) following the established monkeypatch pattern (`test_run_daily`/`test_export_obsidian`):
+  the pure helpers' edge branches (`_coerce_float` across None/number/`"12 divine"`/`"~5"`/no-match;
+  `_normalize_risk` low/high/med/empty; `_LLMStrategy.sources` validator coercing bare strings to
+  `{"url": …}`, keeping dicts, dropping junk, and non-list → `[]`; `_price_value`'s divine→chaos
+  fallback and the same fallback surfacing in `build_user_prompt`); `parse_llm_json`'s remaining
+  paths (stray prose before the object, a bare top-level list, and valid-JSON-but-schema-invalid →
+  `ValueError`); the `to_markdown` loop body (numbered heading, div/h, risk, investment, summary
+  bullet); and the I/O-bound trio with their deferred imports stubbed — `curate()` (asserts the
+  GLM call gets `glm_curation_model` + `temperature=0.3` and the result ranks by profit desc),
+  `run()` (`db.repo.latest_prices`/`insert_farm_strategies` + `_recent_knowledge` monkeypatched;
+  asserts the insert payload and the printed count line), and `_recent_knowledge()` (`db.connection.
+  fetch_all` faked; asserts the `knowledge_chunk` / `ORDER BY captured_at DESC` query). No
+  production code changed — tests only. +24 offline tests (350 → 374); `curate.py` now 99% (only
+  the `__main__` guard remains, conventionally excluded). ruff clean. Corrected the P3 note and
+  listed the next sub-80% collector targets (`rss_client.py`, `add_knowledge.py`,
+  `seed_craft_methods.py`).
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
