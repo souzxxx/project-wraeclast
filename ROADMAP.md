@@ -11,7 +11,10 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [ ] `ruff check .` and `pytest -q` are green; if not, fix the breakage.
 - [ ] No daily-collection step is silently failing (check the latest GitHub Actions run / logs).
       _(now enforced, not just eyeballed: `run_daily` exits non-zero + emits Actions annotations
-      when any step fails, so a swallowed collector error goes red instead of silently green — see Done 2026-07-04.)_
+      when a REQUIRED step fails, so a swallowed collector error goes red instead of silently green —
+      see Done 2026-07-04. Documented-optional steps (`meta_builds`, `rss`) still surface as
+      `::warning` annotations but keep the run green so a known non-critical failure doesn't cry
+      wolf daily — see Done 2026-07-13.)_
 - [ ] No secret committed; `.env` stays gitignored.
 
 ## P1 — Daily intelligence layer
@@ -81,6 +84,24 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-13** — P0 health: stop the daily run from going **red every day for a non-critical
+  reason**. Since 2026-07-06 the run has exited 1 daily because `meta_builds` 404s on the
+  UNCONFIRMED PoE2 builds endpoint — even though `run_all`'s own comment says that step "degrades
+  gracefully if it fails" and the `/build` route degrades gracefully without it. A perpetually-red
+  badge for a known/expected failure trains the owner to ignore red, which defeats the loud-failure
+  system built on 2026-07-04. Fix: distinguish **required** step failures (→ red, exit 1) from
+  **optional** ones — `meta_builds` (documented graceful-degrade + unconfirmed endpoint) and `rss`
+  (CLAUDE.md marks it "opcional"; YouTube is the primary knowledge source). `_step` gains an
+  `optional` flag; `run_all`'s summary now splits `failed_required` / `failed_optional`; `main`
+  returns 1 only on a **required** failure (falls back to `failed_steps` for older shapes).
+  Optional failures stay fully **visible** — never silently green: they still emit a GitHub
+  annotation, now `::warning` (yellow) instead of `::error` (red), and the `$GITHUB_STEP_SUMMARY`
+  table marks them "_(optional — did not fail the run)_". No collector logic changed; the per-step
+  try/except + full-sequence resilience is untouched. +8 offline tests (350 → 358): the
+  optional/required summary split for both edge classes, that only `meta_builds`+`rss` are optional,
+  `::warning` vs `::error` rendering, the step-summary marker, and `main` returning 0 on an
+  optional-only failure (while still printing the warning) vs 1 when a required step also fails.
+  ruff clean.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand

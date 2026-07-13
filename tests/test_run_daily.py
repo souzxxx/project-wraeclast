@@ -68,7 +68,7 @@ def test_step_records_success():
         return 7
 
     asyncio.run(_step("s", ok, results))
-    assert results["s"] == {"ok": True, "result": 7}
+    assert results["s"] == {"ok": True, "result": 7, "optional": False}
 
 
 def test_step_swallows_exception_and_records_error():
@@ -78,7 +78,22 @@ def test_step_swallows_exception_and_records_error():
         raise ValueError("kaboom")
 
     asyncio.run(_step("s", boom, results))
-    assert results["s"] == {"ok": False, "error": "kaboom"}
+    assert results["s"] == {"ok": False, "error": "kaboom", "optional": False}
+
+
+def test_step_records_optional_flag():
+    results: dict = {}
+
+    async def ok():
+        return 1
+
+    async def boom():
+        raise ValueError("x")
+
+    asyncio.run(_step("good", ok, results, optional=True))
+    asyncio.run(_step("bad", boom, results, optional=True))
+    assert results["good"]["optional"] is True
+    assert results["bad"]["optional"] is True
 
 
 # ── run_all — full orchestration ─────────────────────────────────────────────────────
@@ -166,21 +181,60 @@ def test_run_all_resilient_at_the_edges(monkeypatch, failing):
 
     assert results[failing]["ok"] is False
     assert results["summary"]["failed_steps"] == [failing]
+    # a required step failing lands in failed_required (turns the run red)
+    assert results["summary"]["failed_required"] == [failing]
+    assert results["summary"]["failed_optional"] == []
     # all 12 steps were still attempted
     assert len([k for k in results if k != "summary"]) == len(STEP_ORDER)
+
+
+@pytest.mark.parametrize("failing", ["meta_builds", "rss"])
+def test_run_all_optional_failure_does_not_turn_red(monkeypatch, failing):
+    calls: list = []
+    fail_run = {"meta_builds": "ninja_meta_client", "rss": "rss_client"}[failing]
+    _patch_all(monkeypatch, calls, fail=fail_run)
+
+    results = asyncio.run(run_all())
+
+    # the optional step is recorded failed and flagged, but stays out of failed_required
+    assert results[failing]["ok"] is False
+    assert results[failing]["optional"] is True
+    assert results["summary"]["failed_steps"] == [failing]
+    assert results["summary"]["failed_optional"] == [failing]
+    assert results["summary"]["failed_required"] == []
+
+
+def test_run_all_marks_only_meta_builds_and_rss_optional(monkeypatch):
+    calls: list = []
+    _patch_all(monkeypatch, calls)
+
+    results = asyncio.run(run_all())
+
+    optional = {s for s in STEP_ORDER if results[s].get("optional")}
+    assert optional == {"meta_builds", "rss"}
 
 
 # ---- failure surfacing (annotations / step summary / main exit code) ----
 
 
-def _results(ok=(), failed=()):
-    """Build a results dict shaped like run_all's return value."""
+def _results(ok=(), failed=(), optional=()):
+    """Build a results dict shaped like run_all's return value.
+
+    `optional` is the set of step names (ok or failed) marked non-critical.
+    """
+    optional = set(optional)
     out = {}
     for name in ok:
-        out[name] = {"ok": True, "result": 1}
+        out[name] = {"ok": True, "result": 1, "optional": name in optional}
+    failed_names = [n for n, _ in failed]
     for name, err in failed:
-        out[name] = {"ok": False, "error": err}
-    out["summary"] = {"ok_steps": list(ok), "failed_steps": [n for n, _ in failed]}
+        out[name] = {"ok": False, "error": err, "optional": name in optional}
+    out["summary"] = {
+        "ok_steps": list(ok),
+        "failed_steps": failed_names,
+        "failed_required": [n for n in failed_names if n not in optional],
+        "failed_optional": [n for n in failed_names if n in optional],
+    }
     return out
 
 
@@ -212,6 +266,19 @@ def test_render_annotations_tolerates_missing_error_field():
     ]
 
 
+def test_render_annotations_uses_warning_for_optional_failures():
+    res = _results(
+        ok=["ninja_economy"],
+        failed=[("curate", "boom"), ("meta_builds", "404")],
+        optional=["meta_builds"],
+    )
+    lines = render_annotations(res)
+    assert lines == [
+        "::error title=Daily collection::step 'curate' failed: boom",
+        "::warning title=Daily collection::step 'meta_builds' failed (optional): 404",
+    ]
+
+
 def test_render_step_summary_all_ok_has_no_table():
     md = render_step_summary(_results(ok=["a", "b"]))
     assert "## Daily collection" in md
@@ -224,6 +291,42 @@ def test_render_step_summary_lists_failed_rows():
     assert "OK: 1 · Failed: 1" in md
     assert "| Step | Error |" in md
     assert "| `curate` | boom |" in md
+
+
+def test_render_step_summary_marks_optional_failures():
+    md = render_step_summary(
+        _results(ok=["a"], failed=[("meta_builds", "404")], optional=["meta_builds"])
+    )
+    assert "1 optional, did not fail the run" in md
+    assert "| `meta_builds` | 404 _(optional — did not fail the run)_ |" in md
+
+
+def test_main_returns_zero_when_only_optional_step_failed(monkeypatch, capsys):
+    async def fake_run_all():
+        return _results(
+            ok=["ninja_economy"], failed=[("meta_builds", "404")], optional=["meta_builds"]
+        )
+
+    monkeypatch.setattr(rd, "run_all", fake_run_all)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    # an optional-only failure keeps the run green (exit 0)...
+    assert main() == 0
+    # ...but is still surfaced as a visible warning annotation.
+    out = capsys.readouterr().out
+    assert "::warning title=Daily collection::step 'meta_builds' failed (optional): 404" in out
+
+
+def test_main_returns_one_when_required_fails_even_with_optional(monkeypatch):
+    async def fake_run_all():
+        return _results(
+            ok=["ninja_economy"],
+            failed=[("curate", "boom"), ("meta_builds", "404")],
+            optional=["meta_builds"],
+        )
+
+    monkeypatch.setattr(rd, "run_all", fake_run_all)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    assert main() == 1
 
 
 def test_main_returns_zero_when_no_failures(monkeypatch):
@@ -286,5 +389,5 @@ def test_run_all_records_failed_step_and_keeps_going(monkeypatch):
         await rd._step("second", fine, results)
 
     asyncio.run(drive())
-    assert results["first"] == {"ok": False, "error": "kaboom"}
-    assert results["second"] == {"ok": True, "result": 7}
+    assert results["first"] == {"ok": False, "error": "kaboom", "optional": False}
+    assert results["second"] == {"ok": True, "result": 7, "optional": False}

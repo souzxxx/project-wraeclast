@@ -23,15 +23,24 @@ log = logging.getLogger("run_daily")
 
 
 async def _step(
-    name: str, make_awaitable: Callable[[], Awaitable[Any]], results: dict[str, Any]
+    name: str,
+    make_awaitable: Callable[[], Awaitable[Any]],
+    results: dict[str, Any],
+    *,
+    optional: bool = False,
 ) -> None:
+    """Run one step, isolating its failure. `optional=True` marks a step whose failure is
+    surfaced (annotation + summary) but must NOT flip the run red — for documented
+    non-critical sources that degrade gracefully (meta_builds, rss)."""
     try:
         result = await make_awaitable()
-        results[name] = {"ok": True, "result": result}
+        results[name] = {"ok": True, "result": result, "optional": optional}
         log.info("step %s OK: %s", name, result)
     except Exception as exc:  # noqa: BLE001 — resilience: keep going, record the failure
-        results[name] = {"ok": False, "error": str(exc)}
-        log.error("step %s FAILED: %s\n%s", name, exc, traceback.format_exc())
+        results[name] = {"ok": False, "error": str(exc), "optional": optional}
+        level = log.warning if optional else log.error
+        level("step %s FAILED%s: %s\n%s", name, " (optional)" if optional else "", exc,
+              traceback.format_exc())
 
 
 async def run_all(pob_code: str | None = None) -> dict[str, Any]:
@@ -52,10 +61,13 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     results: dict[str, Any] = {}
     await _step("ninja_economy", ninja_client.run, results)
     await _step("my_build", lambda: ninja_build_client.run(pob_code), results)
-    # popular/meta builds per class — the /build diff reference (degrades gracefully if it fails).
-    await _step("meta_builds", ninja_meta_client.run, results)
+    # popular/meta builds per class — the /build diff reference. OPTIONAL: the /build route
+    # degrades gracefully without it and the PoE2 builds endpoint is UNCONFIRMED (skill §1),
+    # so its failure is surfaced but does not fail the run (it would otherwise cry wolf daily).
+    await _step("meta_builds", ninja_meta_client.run, results, optional=True)
     await _step("youtube", youtube_client.run, results)
-    await _step("rss", rss_client.run, results)
+    # rss is a supplementary knowledge feed (CLAUDE.md: "opcional") — youtube is primary.
+    await _step("rss", rss_client.run, results, optional=True)
     # seed curated craft knowledge before curation/guides can use it (sync -> thread).
     await _step("seed_knowledge", lambda: asyncio.to_thread(seed_knowledge.run), results)
     # seed structured craft methods (Craft 2 — recipe data the EV engine will price).
@@ -67,9 +79,14 @@ async def run_all(pob_code: str | None = None) -> dict[str, Any]:
     await _step("craft_guides", lambda: asyncio.to_thread(craft_guides.run), results)
     await _step("export_obsidian", lambda: asyncio.to_thread(export_obsidian.run), results)
     await _step("daily_insight", lambda: asyncio.to_thread(daily_insight.run), results)
+    steps = [(k, v) for k, v in results.items() if isinstance(v, dict)]
+    failed = [k for k, v in steps if not v.get("ok")]
     results["summary"] = {
-        "ok_steps": [k for k, v in results.items() if isinstance(v, dict) and v.get("ok")],
-        "failed_steps": [k for k, v in results.items() if isinstance(v, dict) and not v.get("ok")],
+        "ok_steps": [k for k, v in steps if v.get("ok")],
+        "failed_steps": failed,
+        # only REQUIRED failures turn the run red; optional ones stay visible as warnings.
+        "failed_required": [k for k in failed if not results[k].get("optional")],
+        "failed_optional": [k for k in failed if results[k].get("optional")],
     }
     return results
 
@@ -80,16 +97,21 @@ def _one_line(text: object) -> str:
 
 
 def render_annotations(results: dict[str, Any]) -> list[str]:
-    """One GitHub Actions '::error::' workflow command per failed step.
+    """One GitHub Actions workflow command per failed step.
 
     Pure over its input so it's unit-testable offline. Printing these makes each failed
     collector show up as an annotation on the run page instead of a buried log line.
+    Required failures use '::error' (red); optional ones use '::warning' (yellow) so they
+    stay visible without turning the run red.
     """
     failed = results.get("summary", {}).get("failed_steps", [])
     lines: list[str] = []
     for name in failed:
         err = _one_line(results.get(name, {}).get("error", "unknown error"))
-        lines.append(f"::error title=Daily collection::step '{name}' failed: {err}")
+        optional = results.get(name, {}).get("optional")
+        level = "warning" if optional else "error"
+        suffix = " (optional)" if optional else ""
+        lines.append(f"::{level} title=Daily collection::step '{name}' failed{suffix}: {err}")
     return lines
 
 
@@ -101,12 +123,20 @@ def render_step_summary(results: dict[str, Any]) -> str:
     summary = results.get("summary", {})
     ok = summary.get("ok_steps", [])
     failed = summary.get("failed_steps", [])
+    optional_failed = [n for n in failed if results.get(n, {}).get("optional")]
     lines = ["## Daily collection", "", f"- OK: {len(ok)} · Failed: {len(failed)}", ""]
+    if optional_failed:
+        # spell out that these did not fail the run, so a yellow warning isn't misread as red.
+        lines[2] = (
+            f"- OK: {len(ok)} · Failed: {len(failed)} "
+            f"({len(optional_failed)} optional, did not fail the run)"
+        )
     if failed:
         lines += ["| Step | Error |", "| --- | --- |"]
         for name in failed:
             err = _one_line(results.get(name, {}).get("error", "unknown error"))
-            lines.append(f"| `{name}` | {err} |")
+            suffix = " _(optional — did not fail the run)_" if name in optional_failed else ""
+            lines.append(f"| `{name}` | {err}{suffix} |")
         lines.append("")
     return "\n".join(lines)
 
@@ -114,8 +144,10 @@ def render_step_summary(results: dict[str, Any]) -> str:
 def main() -> int:
     """Run the daily collection, surface any failures, and return the process exit code.
 
-    Returns 1 when any step failed so the Actions run goes red (never silently green);
-    the report still commits because the workflow's commit step uses `if: always()`.
+    Returns 1 when any REQUIRED step failed so the Actions run goes red (never silently
+    green); optional-step failures are surfaced as warnings but keep the run green so a
+    documented non-critical source doesn't cry wolf daily. The report still commits because
+    the workflow's commit step uses `if: always()`.
     """
     out = asyncio.run(run_all())
     summary = out["summary"]
@@ -129,7 +161,9 @@ def main() -> int:
                 fh.write(render_step_summary(out) + "\n")
         except OSError as exc:  # reporting IO must never sink the run
             log.warning("could not write GITHUB_STEP_SUMMARY: %s", exc)
-    return 1 if summary["failed_steps"] else 0
+    # fall back to failed_steps when the required/optional split is absent (older shapes).
+    red = summary.get("failed_required", summary.get("failed_steps", []))
+    return 1 if red else 0
 
 
 if __name__ == "__main__":
