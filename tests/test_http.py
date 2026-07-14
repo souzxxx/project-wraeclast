@@ -1,8 +1,9 @@
 import time
 
 import httpx
+import respx
 
-from collector.http import RateLimiter, TTLCache
+from collector.http import HttpClient, RateLimiter, TTLCache
 
 
 def test_ttl_cache_hit_and_expiry():
@@ -38,3 +39,14 @@ def test_rate_limiter_idle_when_below_cap():
     })
     rl.observe(headers)
     assert rl._wait_until <= time.monotonic()
+
+
+@respx.mock
+async def test_get_bytes_returns_raw_body_and_caches():
+    route = respx.get("https://x.test/bin").mock(
+        return_value=httpx.Response(200, content=b"\x0a\x03abc")
+    )
+    async with HttpClient("test-ua", base_url="https://x.test") as http:
+        assert await http.get_bytes("/bin", cache_ttl=60) == b"\x0a\x03abc"
+        assert await http.get_bytes("/bin", cache_ttl=60) == b"\x0a\x03abc"
+    assert route.call_count == 1  # second hit served from the TTL cache
