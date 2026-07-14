@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
     # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
     ninja_builds_path: str = "/poe2/api/builds/overview"
+    # Ordered CANDIDATE builds paths tried until one yields characters (resilient collection, same
+    # spirit as ninja_client swallowing a per-category failure). The live path drifted/404'd
+    # (see ROADMAP Done 2026-07-06), and each guess otherwise cost a redeploy; now the deploy's
+    # `explore` sweeps every candidate in one run and the collector self-heals to whichever works.
+    # Default adds a `/0/` variant that MIRRORS the confirmed economy exchange path
+    # (`/poe2/api/economy/exchange/0/overview`); still unconfirmed — override via env when found.
+    ninja_builds_paths: str = "/poe2/api/builds/overview,/poe2/api/builds/0/overview"
     ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
     ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
 
@@ -99,6 +106,18 @@ class Settings(BaseSettings):
     @property
     def rss_feed_list(self) -> list[str]:
         return [f.strip() for f in self.rss_feeds.split(",") if f.strip()]
+
+    @property
+    def ninja_builds_path_list(self) -> list[str]:
+        """Ordered, de-duplicated candidate builds paths. The singular `ninja_builds_path` is
+        always tried first (a deploy may set only that one), followed by any extra candidates.
+        Never empty — falls back to the singular path."""
+        paths: list[str] = []
+        for raw in [self.ninja_builds_path, *self.ninja_builds_paths.split(",")]:
+            path = raw.strip()
+            if path and path not in paths:
+                paths.append(path)
+        return paths or [self.ninja_builds_path]
 
     @property
     def ninja_economy_category_list(self) -> list[tuple[str, str]]:
