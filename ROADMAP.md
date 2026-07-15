@@ -81,6 +81,30 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-15** — P3 coverage: harden `collector/curate.py` (74% → 99% — clears the 80% bar).
+  The GLM curation core (skill §4/§5 — turns knowledge + prices into the ranked `farm_strategy`
+  the site's Farms tab and the daily report both lead with) is one of the most load-bearing modules
+  in the project, yet a coverage audit found it had drifted back **under the 80% line the P3 note
+  claims "every module clears"**: only the pure transforms were tested, while every defensive edge
+  branch and the whole network/dispatch surface had no regression protection. Added offline tests
+  (no DB, no network — the LLM/DB seams are monkeypatched, same pattern as the ninja/youtube/
+  run_daily coverage work) for: `_coerce_float` (None / number / leading-number-in-free-text /
+  no-digits → None), `_normalize_risk` (empty → None, `l*`→low, `h*`→high, else→med), the
+  `_LLMStrategy.sources` validator (non-list → `[]`; dicts pass through, bare strings wrap to
+  `{"url": …}`, non-str/dict dropped), `_price_value` + `build_user_prompt` (divine preferred,
+  chaos fallback, unpriced rows dropped); `parse_llm_json`'s remaining defensive branches
+  (isolating the object after stray prose, accepting a bare strategy list, and a valid-JSON-but-
+  schema-invalid payload raising `ValueError`); `to_markdown` over a real (non-empty) strategy list
+  (numbering + risk/investment meta + summary line); and the previously-0%-covered
+  `curate`/`run`/`_recent_knowledge` trio — `curate` asserts the system+user turns and the fixed
+  `temperature=0.3` while ranking the mocked GLM output, `run` wires `latest_prices` +
+  `_recent_knowledge` + `insert_farm_strategies`, and `_recent_knowledge` binds the latest-chunks
+  query. No production code changed — tests only. +12 offline tests (350 → 363 with the 1
+  pre-existing skip elsewhere; curate suite 12 → 24). ruff clean. Only line 267 (the `__main__`
+  guard) remains, conventionally excluded — same 99% ceiling as the other collectors. **Still
+  sub-80% for a future night** (surfaced by the same audit): `collector/rss_client.py` (70% — pure
+  `parse_feed` tested, `fetch_rss`/`run` network surface not), `collector/add_knowledge.py` (60%),
+  and `collector/seed_craft_methods.py` (56%).
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
