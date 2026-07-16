@@ -2,6 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from scripts.daily_insight import (
+    PRICE_MOVE_MIN_BASELINE,
     canonical_farm_key,
     compute_insight,
     farm_ranking_changes,
@@ -132,6 +133,35 @@ def test_price_moves_ignore_missing_baseline_and_zero_old():
     latest = [_price("New", 50, T1), _price("ZeroOld", 50, T1)]
     prev = [_price("ZeroOld", 0, T0)]  # no "New" yesterday; ZeroOld had 0 -> skip div-by-zero
     assert notable_price_moves(latest, prev) == []
+
+
+def test_price_moves_skip_near_zero_baseline_noise():
+    # Regression: a micro-price baseline (illiquid item, ~0.002 div) makes the percentage
+    # meaningless — 0.002 -> 0.4 div reads as "+17000%" and floods the report. It clears both the
+    # relative (>=25%) and absolute (>=0.02 div) bars, so only the baseline floor stops it.
+    latest = [_price("Illiquid", 0.4, T1), _price("Real", 0.41, T1)]
+    prev = [_price("Illiquid", 0.002, T0), _price("Real", 0.15, T0)]  # 0.002 < floor, 0.15 >= floor
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["Real"]  # only the move off a real baseline survives
+    # The kept move is a sane double-digit-hundreds %, not a five-digit explosion.
+    assert moves[0].pct < 1000
+
+
+def test_price_moves_keep_move_exactly_at_baseline_floor():
+    # The floor is inclusive: a baseline of exactly PRICE_MOVE_MIN_BASELINE still counts.
+    latest = [_price("Edge", PRICE_MOVE_MIN_BASELINE + 0.5, T1)]
+    prev = [_price("Edge", PRICE_MOVE_MIN_BASELINE, T0)]
+    assert [m.name for m in notable_price_moves(latest, prev)] == ["Edge"]
+
+
+def test_price_moves_baseline_floor_does_not_block_crash_to_zero():
+    # A currency crashing FROM a real price TO near-zero must still be flagged — the floor gates the
+    # divisor (yesterday's price), not today's, so a -90% collapse off a healthy baseline survives.
+    latest = [_price("Crashed", 0.01, T1)]
+    prev = [_price("Crashed", 0.5, T0)]
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["Crashed"]
+    assert moves[0].pct < 0
 
 
 def test_price_moves_sorted_by_magnitude():
