@@ -34,6 +34,14 @@ PRICE_MOVE_MIN_PCT = 25.0
 # Absolute floor to kill micro-noise. PoE2 prices are divine-denominated (~0.001–1 div for most
 # currencies, Divine = 1.0), so this is a divine-scaled value, not chaos.
 PRICE_MOVE_MIN_VALUE = 0.02
+# Baseline floor. A *percentage* move is only meaningful when the yesterday-price it divides by is
+# a real price. poe.ninja quotes illiquid items in tiny fractional-divine amounts (~0.001–0.03 div)
+# whose absolute value is dominated by rounding/thin-order noise, so dividing by them explodes the
+# pct into meaningless four-/five-digit values (e.g. 0.002 -> 0.4 div reads as "+17038%") that
+# flood and bury the genuinely notable moves. Require a baseline of at least this many divines for
+# the % to be trustworthy. (A currency that legitimately materialised from ~0 needs an
+# absolute-newcomer detector, not a % lens — out of scope here.)
+PRICE_MOVE_MIN_BASELINE = 0.05
 PRICE_ANOMALY_PCT = 50.0
 TOP_N = 5
 
@@ -190,6 +198,10 @@ def notable_price_moves(
             continue
         old_val = _row_value(old_row)
         if not old_val or old_val <= 0:
+            continue
+        # A near-zero baseline makes the percentage meaningless (divide-by-noise); skip it so the
+        # report leads with real moves instead of "+17038%" explosions off illiquid micro-prices.
+        if old_val < PRICE_MOVE_MIN_BASELINE:
             continue
         pct = (now_val - old_val) / old_val * 100.0
         if abs(pct) >= PRICE_MOVE_MIN_PCT and abs(now_val - old_val) >= PRICE_MOVE_MIN_VALUE:

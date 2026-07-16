@@ -81,6 +81,23 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-16** — P1 data quality: stop the daily "what changed today" insight from being flooded
+  by **meaningless percentage explosions off near-zero baselines**. Now that prices are
+  divine-denominated, poe.ninja quotes illiquid items in tiny fractional-divine amounts
+  (~0.001–0.03 div) dominated by rounding/thin-order noise. `notable_price_moves` divided by those
+  micro-baselines, so a 0.002 → 0.4 div move read as **"+17038%"** — and today's real report
+  (`reports/2026-07-16-insight-*.md`) led with a wall of such garbage (+17038%, +10610%, +7459%,
+  +3241%, +2729%, +2591%…), 60+ anomalies burying the genuinely actionable moves. Root cause: the
+  function had a relative bar (25%) and an absolute bar (0.02 div) but **no floor on the baseline it
+  divides by**; the divide-by-noise entries cleared both. Fix: add `PRICE_MOVE_MIN_BASELINE = 0.05`
+  div — a percentage is only trustworthy when yesterday's price was itself real. The floor gates the
+  *divisor* only, so a currency crashing FROM a healthy price TO ~0 is still flagged (verified);
+  a currency that legitimately materialised from ~0 would need an absolute-newcomer detector, not a
+  % lens (noted, out of scope). Simulated against today's real values: the three +17038%/+10610%/
+  +2729% explosions vanish while Essence of Opulence (+173%), Greater Ward Rune (−71%) and Emergent
+  Vigour (+35%) survive. +3 offline regression tests (near-zero-baseline noise skipped, inclusive
+  floor edge, crash-to-zero still flagged). ruff clean; `pytest -q` 350 → 353. One-line production
+  guard; no schema or league hardcoding.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
