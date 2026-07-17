@@ -81,6 +81,28 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-17** — P3 coverage regression: restore the core farm-ranking module `collector/curate.py`
+  to the 80% bar (74% → 99%). The P3 "every module clears 80%" claim had silently **regressed** —
+  a full `pytest-cov` sweep found four modules back under the line (`curate.py` 74%, `rss_client.py`
+  70%, `add_knowledge.py` 60%, `seed_craft_methods.py` 56%), coverage having drifted as the suite
+  grew without a per-module gate. `curate.py` is the highest-value of these: it's the GLM curation
+  that produces the ranked `farm_strategy` (the project's headline feature), and its entire
+  pipeline seam was untested — the lenient `_LLMStrategy` field validators (string→number coercion,
+  risk normalization low/med/high, the `sources` dict/non-list branches), `_price_value`'s
+  divine-first/chaos-fallback pricing in `build_user_prompt`, `parse_llm_json`'s stray-prose
+  isolation + bare-list + schema-violation branches, `to_markdown`'s numbered-entry body, and the
+  whole `curate()`/`run()`/`_recent_knowledge()` chain. New offline tests (no DB, no network,
+  no LLM) drive them via the established repo pattern: `glm_chat` monkeypatched on the module,
+  `db.repo.latest_prices`/`insert_farm_strategies` + `db.connection.fetch_all` monkeypatched at the
+  call-time-import seam. The `run()` test asserts the read→curate→write→count contract and that a
+  cited knowledge entry resolves to its real chunk URL while an inflated free-text profit still
+  loses to the CALCULATED figure. No production code changed — tests only. +13 offline tests
+  (350 → 363). ruff clean. (Line 267, the `__main__` guard, is the only line left, conventionally
+  excluded — same as the other 99% modules.) **Still sub-80% (out of scope tonight, one module per
+  run):** `rss_client.py` (70%), `add_knowledge.py` (60%), `seed_craft_methods.py` (56%) — next
+  nightly candidates. The `meta_builds FAILED: 404` production issue flagged 2026-07-06 remains
+  blocked here: poe.ninja is denied by this environment's network policy (403 on CONNECT), so the
+  live endpoint exploration it needs still can't run offline.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
