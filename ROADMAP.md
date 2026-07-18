@@ -81,6 +81,28 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-14** — P0 health: harden the `meta_builds` collector against the documented builds-path
+  404 (the still-open failure flagged on 2026-07-06). Root problem: `ninja_builds_path` was a
+  **single** guessed path, so a wrong/drifted PoE2 builds endpoint threw on the only candidate and
+  each guess cost a full redeploy to test. Now the path is a config-driven ordered **candidate
+  list** (`ninja_builds_paths`, env-overridable) and `fetch_popular_builds` tries each in order via
+  the new pure-ish `_fetch_builds_characters`, self-healing to the first that returns characters —
+  the same resilient-collection pattern `ninja_client` already uses for per-category failures. A
+  candidate that 404s/5xxs/errors or returns zero characters is skipped; **only when every
+  candidate fails does it raise**, so a genuinely broken source still goes RED in `run_daily`
+  (preserving the 2026-07-04 loud-failure contract — never a silent zero-build write under a green
+  tick). `explore` now **sweeps every candidate and reports each one's status** (dumping the sample
+  for the first that works), so the owner confirms the live endpoint in a single deploy instead of
+  redeploy-per-guess. The default list adds a `/poe2/api/builds/0/overview` variant that mirrors the
+  **confirmed** economy exchange path shape (`/poe2/api/economy/exchange/0/overview`) — still
+  unconfirmed, documented as such, overridable via env. League stays param-driven, never hardcoded.
+  New config property `ninja_builds_path_list` (dedupes, singular-path-first, never empty). +6
+  offline tests (350 → 356): the fallthrough to the next candidate, the skip-empty-candidate path,
+  the all-candidates-fail RuntimeError, the explore sweep reporting each status, and the two config
+  path-list branches. ruff clean; `pytest -q` 356 passed. **Not fully closed:** the actual working
+  PoE2 builds path still needs live confirmation (run `python -m collector.ninja_meta_client
+  explore` in the deploy) — but the collector is now resilient to the drift and the owner has a
+  one-run tool to find it.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand

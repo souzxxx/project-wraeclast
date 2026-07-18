@@ -19,6 +19,7 @@ from collector.ninja_meta_client import (
 )
 
 BUILDS_URL = "https://poe.ninja/poe2/api/builds/overview"
+BUILDS_URL_ALT = "https://poe.ninja/poe2/api/builds/0/overview"
 
 
 def _char(cls, *gems):
@@ -147,6 +148,56 @@ async def test_fetch_popular_builds_truncates_to_max_chars():
     assert build.sample_size == 3
 
 
+def test_builds_path_list_dedupes_and_orders():
+    # the singular path is always tried first, then the extra candidates, de-duplicated.
+    s = Settings(
+        ninja_builds_path="/a", ninja_builds_paths="/b, /a ,/c,,"
+    )
+    assert s.ninja_builds_path_list == ["/a", "/b", "/c"]
+
+
+def test_builds_path_list_falls_back_to_singular_when_candidates_empty():
+    s = Settings(ninja_builds_path="/only", ninja_builds_paths="  ,  ")
+    assert s.ninja_builds_path_list == ["/only"]
+
+
+@respx.mock
+async def test_fetch_popular_builds_falls_through_to_next_candidate():
+    # first candidate 404s, second returns characters -> collector self-heals to the working path.
+    first = respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Witch", "Comet", "Frostbolt") for _ in range(3)]}
+    second = respx.get(BUILDS_URL_ALT).mock(return_value=httpx.Response(200, json=payload))
+    builds = await fetch_popular_builds(Settings())
+    assert first.called and second.called
+    [build] = builds
+    assert build.char_class == "Witch"
+    assert [g["name"] for g in build.gems] == ["Comet", "Frostbolt"]
+
+
+@respx.mock
+async def test_fetch_popular_builds_skips_empty_candidate():
+    # a candidate that responds 200 but with no characters is skipped, not accepted as "done".
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json={"characters": []}))
+    payload = {"characters": [_char("Monk", "Tempest") for _ in range(3)]}
+    respx.get(BUILDS_URL_ALT).mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(Settings())
+    assert build.char_class == "Monk"
+
+
+@respx.mock
+async def test_fetch_popular_builds_raises_when_all_candidates_fail():
+    # every candidate 404s -> raise so run_daily surfaces it red (never a silent zero-build write).
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    respx.get(BUILDS_URL_ALT).mock(return_value=httpx.Response(500))
+    try:
+        await fetch_popular_builds(Settings())
+    except RuntimeError as exc:
+        assert "no poe.ninja builds endpoint" in str(exc)
+        assert "/poe2/api/builds/overview" in str(exc)
+    else:
+        raise AssertionError("expected RuntimeError when every candidate fails")
+
+
 async def test_run_writes_meta_builds(monkeypatch, capsys):
     builds = aggregate_meta_builds([_char("Witch", "Comet")] * 3, "Runes of Aldur", min_sample=3)
 
@@ -168,10 +219,24 @@ async def test_run_writes_meta_builds(monkeypatch, capsys):
 async def test_explore_dumps_character_count_and_sample(capsys):
     payload = {"characters": [_char("Witch", "Comet"), _char("Monk", "Tempest")]}
     respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json=payload))
+    respx.get(BUILDS_URL_ALT).mock(return_value=httpx.Response(404))  # swept too, reported failed
     await explore()
     out = capsys.readouterr().out
     assert "characters found: 2" in out
     assert "Comet" in out  # first chars sampled into the JSON dump
+
+
+@respx.mock
+async def test_explore_sweeps_candidates_reporting_each(capsys):
+    # explore reports the failing candidate AND the working one, dumping the sample only once.
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Monk", "Tempest") for _ in range(2)]}
+    respx.get(BUILDS_URL_ALT).mock(return_value=httpx.Response(200, json=payload))
+    await explore()
+    out = capsys.readouterr().out
+    assert "/poe2/api/builds/overview: FAILED" in out
+    assert "/poe2/api/builds/0/overview: characters found: 2" in out
+    assert out.count("Tempest") >= 1  # sample dumped for the working candidate
 
 
 def test_main_dispatches_run(monkeypatch):
