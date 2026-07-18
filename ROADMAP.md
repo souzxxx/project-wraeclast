@@ -81,6 +81,25 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-18** — P1 quality: de-noise the daily "what changed today" insight (the P1 anomaly
+  layer, shipped 2026-06-19, had degraded into a signal-less dump). The committed
+  `2026-07-18-insight` report carried **60+ anomalies and 80+ price moves**, dominated by garbage
+  like `Lesser Essence of Seeking jumped +49921% (0.0 → 1.17 div)` and `Perfect Essence of the Body
+  jumped +2122% (0.0 → 0.03 div)`. Root cause: `notable_price_moves` computed `(now - old) / old`
+  with a floor only on the **delta** (`PRICE_MOVE_MIN_VALUE`) and the percentage — never on the
+  **baseline**. When yesterday's price was dust (~0.001 div, low-sample poe.ninja noise), the
+  percentage exploded into five-digit values that then dominated the magnitude sort and drowned the
+  real movers. Fixed at the source with `PRICE_MOVE_MIN_BASE = 0.05` div: a percentage is only
+  computed when the baseline is a real, liquid price (a dust item "emerging from ~0" is not a
+  day-over-day *move*). Also added `MAX_NOTABLE_MOVES = 15` — the note renders the biggest moves
+  with a `…and N more past the threshold.` footer (count never silently hidden), and the anomaly
+  feed derives only from that capped top slice, so a volatile day no longer emits a 60-line ⚠️
+  block. Verified offline against representative rows from today's report: the three garbage
+  near-zero-base entries drop, the genuine moves (`Citaqualotl's Thesis +281%`, `Omen of the Hunt
+  +208%`, `Essence of Grounding -95%`) survive, and the max surfaced percentage falls from ~50000%
+  to a believable 281%. Pure-function change, no schema/league/secret touch. +2 offline regression
+  tests (350 → 352): a near-zero baseline is skipped while a move off a liquid base survives, and
+  the moves list + anomaly feed are both capped with the remainder recorded. ruff clean.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
