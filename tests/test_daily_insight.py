@@ -141,6 +141,41 @@ def test_price_moves_sorted_by_magnitude():
     assert [m.name for m in moves] == ["Down", "Up"]  # -90% beats +40%
 
 
+def test_price_moves_ignore_near_zero_baseline():
+    # A dust item (~0.001 div yesterday) "jumping" to a real value produces a five-digit garbage
+    # percentage that used to dominate the report. The move clears the pct + absolute-delta bars,
+    # yet must be dropped because the baseline is below the trust floor (0.05 div).
+    def _d(name, divine, when):
+        return {"name": name, "item_type": "essence", "chaos_value": None,
+                "divine_value": divine, "captured_at": when}
+
+    latest = [_d("Dust", 1.17, T1), _d("Real", 1.0, T1)]
+    prev = [_d("Dust", 0.001, T0), _d("Real", 0.1, T0)]  # Dust base < 0.05 -> skipped
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["Real"]  # only the move off a liquid baseline survives
+    assert moves[0].pct == 900.0  # 0.1 -> 1.0, a clean 10x, not a bogus +116900%
+
+
+def test_notable_moves_and_anomalies_are_capped():
+    # A volatile day yields many qualifying moves; the note must surface only the top
+    # MAX_NOTABLE_MOVES and record the remainder, instead of dumping 60+ lines.
+    from scripts.daily_insight import MAX_NOTABLE_MOVES
+
+    n = MAX_NOTABLE_MOVES + 5
+    # Distinct magnitudes so the sort is deterministic; all bases >= 0.05, all clear the floors.
+    latest = [_price(f"C{i}", 1.0 + i, T1) for i in range(n)]
+    prev = [_price(f"C{i}", 0.5, T0) for i in range(n)]  # every one a big % jump off a real base
+    ins = compute_insight("L", [], latest + prev, [], today=date(2026, 6, 19))
+    assert len(ins.price_moves) == n  # model keeps the full set
+    # anomalies derive only from the capped top slice
+    price_anoms = [a for a in ins.anomalies if "jumped" in a or "dropped" in a]
+    assert len(price_anoms) <= MAX_NOTABLE_MOVES
+    md = render_insight(ins)
+    rendered = [ln for ln in md.splitlines() if ln.startswith("- 📈") or ln.startswith("- 📉")]
+    assert len(rendered) == MAX_NOTABLE_MOVES
+    assert "…and 5 more past the threshold." in md
+
+
 # ── compute_insight (integration of the pieces) ──────────────────────────────────────
 
 def test_compute_insight_flags_anomalies_and_baseline():

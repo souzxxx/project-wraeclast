@@ -34,7 +34,16 @@ PRICE_MOVE_MIN_PCT = 25.0
 # Absolute floor to kill micro-noise. PoE2 prices are divine-denominated (~0.001–1 div for most
 # currencies, Divine = 1.0), so this is a divine-scaled value, not chaos.
 PRICE_MOVE_MIN_VALUE = 0.02
+# Baseline floor: a percentage is only trustworthy when yesterday's price was a real, liquid
+# value. Below this, `(now - old) / old` explodes into five-digit garbage that says more about
+# float precision at a near-zero base than about the market (a dust item at ~0.001 div "jumping"
+# to 0.03 reads as +2000%). Such rows are low-sample poe.ninja noise, not actionable moves, and
+# left uncapped they dominated the magnitude sort and flooded the report. Divine-scaled.
+PRICE_MOVE_MIN_BASE = 0.05
 PRICE_ANOMALY_PCT = 50.0
+# Keep the daily note a signal, not a dump: surface only the biggest moves, with a "…and N more"
+# footer so the full count is never silently hidden.
+MAX_NOTABLE_MOVES = 15
 TOP_N = 5
 
 
@@ -189,7 +198,8 @@ def notable_price_moves(
         if old_row is None or now_val is None:
             continue
         old_val = _row_value(old_row)
-        if not old_val or old_val <= 0:
+        if not old_val or old_val < PRICE_MOVE_MIN_BASE:
+            # Skip a missing/near-zero baseline: div-by-~zero yields a meaningless percentage.
             continue
         pct = (now_val - old_val) / old_val * 100.0
         if abs(pct) >= PRICE_MOVE_MIN_PCT and abs(now_val - old_val) >= PRICE_MOVE_MIN_VALUE:
@@ -243,7 +253,7 @@ def compute_insight(
         anomalies.append(f"Farm entered top {TOP_N}: {name}")
     for name in left:
         anomalies.append(f"Farm left top {TOP_N}: {name}")
-    for m in price_moves:
+    for m in price_moves[:MAX_NOTABLE_MOVES]:
         if abs(m.pct) >= PRICE_ANOMALY_PCT:
             direction = "jumped" if m.pct > 0 else "dropped"
             anomalies.append(
@@ -311,12 +321,15 @@ def render_insight(insight: DailyInsight) -> str:
 
     lines += ["", "## Notable price moves", ""]
     if insight.price_moves:
-        for m in insight.price_moves:
+        for m in insight.price_moves[:MAX_NOTABLE_MOVES]:
             arrow = "📈" if m.pct > 0 else "📉"
             lines.append(
                 f"- {arrow} **{m.name}** ({m.item_type}): "
                 f"{m.from_chaos} → {m.to_chaos} div ({m.pct:+.1f}%)"
             )
+        extra = len(insight.price_moves) - MAX_NOTABLE_MOVES
+        if extra > 0:
+            lines.append(f"- _…and {extra} more past the threshold._")
     else:
         lines.append("_No moves past the threshold._")
 
