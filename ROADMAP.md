@@ -81,6 +81,24 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-19** — P0 health: make the `meta_builds` collector resilient to the **404 that has
+  failed it every run** since at least 2026-07-06. The PoE2 poe.ninja builds route is still
+  unconfirmed, and `fetch_popular_builds` hit a single config-hardcoded guess
+  (`/poe2/api/builds/overview`) that 404s — so the `/build` meta source has produced nothing in
+  prod. Now the fetch PROBES an ordered candidate list (`Settings.ninja_builds_path_list`: the
+  primary `ninja_builds_path` first, then the new `ninja_builds_alt_paths`, deduped/stripped),
+  grounded in the confirmed economy-exchange shape (`/poe2/api/economy/exchange/0/overview`) plus
+  poe.ninja build-overview naming, and aggregates the first candidate that returns characters. If
+  EVERY candidate fails (HTTP error or empty payload) it raises a `RuntimeError` naming each path
+  tried — so a genuinely dead builds source stays **visible** (caught + annotated by `run_daily`,
+  per the 2026-07-04 no-silent-failure contract), never a silent empty meta. `explore` now reports
+  each candidate's status and dumps the first hit's sample, so the owner can pin the live route via
+  env once one responds. All league/endpoint values stay config-driven (no hardcoding). +6 offline
+  tests (respx: fall-through on 404, skip-empty-then-next, raise-when-all-fail with paths named,
+  the two explore report paths, and the dedup/order property); ruff clean, `pytest -q` 350 → 356.
+  **Still needs a live `explore` run** against the deploy to confirm which candidate (if any) is the
+  real PoE2 route — this makes the collector survive and self-report until then, but can't invent an
+  endpoint that doesn't exist.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand

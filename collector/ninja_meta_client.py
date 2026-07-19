@@ -22,6 +22,8 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any
 
+import httpx
+
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
 from db.models import MetaBuild
@@ -119,17 +121,32 @@ def aggregate_meta_builds(
 
 
 async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
+    """Probe the candidate builds endpoints in order and aggregate the first that returns
+    characters. The PoE2 builds route is unconfirmed and the primary guess has been 404ing in
+    prod, so we fall through to the alternates instead of failing on the first miss. If EVERY
+    candidate fails (HTTP error or empty payload) we raise — a dead builds source must stay
+    visible (it's caught and reported by run_daily), never silently degrade to no meta."""
     settings = settings or get_settings()
-    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await http.get_json(
-            settings.ninja_builds_path,
-            params={"league": settings.poe2_league},
-            cache_ttl=CACHE_TTL,
-        )
-    chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
     source = {"url": settings.ninja_base_url + "/poe2/builds", "title": "poe.ninja builds"}
-    return aggregate_meta_builds(
-        chars, settings.poe2_league, min_usage=settings.ninja_meta_min_usage, source=source
+    errors: list[str] = []
+    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
+        for path in settings.ninja_builds_path_list:
+            try:
+                payload = await http.get_json(
+                    path, params={"league": settings.poe2_league}, cache_ttl=CACHE_TTL
+                )
+            except httpx.HTTPError as exc:
+                errors.append(f"{path}: {exc!s} ({type(exc).__name__})")
+                continue
+            chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
+            if not chars:
+                errors.append(f"{path}: 0 characters")
+                continue
+            return aggregate_meta_builds(
+                chars, settings.poe2_league, min_usage=settings.ninja_meta_min_usage, source=source
+            )
+    raise RuntimeError(
+        "no poe.ninja PoE2 builds endpoint returned characters; tried " + "; ".join(errors)
     )
 
 
@@ -145,15 +162,22 @@ async def run() -> int:
 
 
 async def explore() -> None:
-    """GET the configured builds endpoint and dump raw JSON — confirm shape before modeling."""
+    """Probe every candidate builds endpoint and report which one returns characters — confirm
+    the live PoE2 route + shape before trusting the aggregate. Dumps the first hit's sample."""
     settings = get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        data = await http.get_json(
-            settings.ninja_builds_path, params={"league": settings.poe2_league}
-        )
-    chars = extract_characters(data)
-    print(f"characters found: {len(chars)}")
-    print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
+        for path in settings.ninja_builds_path_list:
+            try:
+                data = await http.get_json(path, params={"league": settings.poe2_league})
+            except httpx.HTTPError as exc:
+                print(f"{path}: ERROR {exc!s} ({type(exc).__name__})")
+                continue
+            chars = extract_characters(data)
+            print(f"{path}: characters found: {len(chars)}")
+            if chars:
+                print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
+                return
+    print("no candidate builds endpoint returned characters")
 
 
 def _main(argv: list[str]) -> int:

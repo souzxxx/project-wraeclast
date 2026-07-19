@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
     # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
     ninja_builds_path: str = "/poe2/api/builds/overview"
+    # Since the builds route is still unconfirmed (the primary above has been 404ing in prod),
+    # the collector PROBES these fallback candidates in order and uses the first that returns
+    # characters. Grounded in the confirmed economy-exchange shape (`/poe2/api/economy/exchange/
+    # 0/overview`) and the poe.ninja build-overview naming. Override/extend via env once the live
+    # route is pinned with `explore`.
+    ninja_builds_alt_paths: str = (
+        "/poe2/api/builds/exchange/0/overview,/poe2/api/builds,/poe2/api/data/getbuildoverview"
+    )
     ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
     ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
 
@@ -99,6 +107,20 @@ class Settings(BaseSettings):
     @property
     def rss_feed_list(self) -> list[str]:
         return [f.strip() for f in self.rss_feeds.split(",") if f.strip()]
+
+    @property
+    def ninja_builds_path_list(self) -> list[str]:
+        """Ordered, deduped candidate builds endpoints: the primary `ninja_builds_path` first,
+        then `ninja_builds_alt_paths`. The collector tries each until one returns characters;
+        `explore` reports every candidate so the owner can pin the real PoE2 route via env."""
+        seen: set[str] = set()
+        out: list[str] = []
+        for path in [self.ninja_builds_path, *self.ninja_builds_alt_paths.split(",")]:
+            path = path.strip()
+            if path and path not in seen:
+                seen.add(path)
+                out.append(path)
+        return out
 
     @property
     def ninja_economy_category_list(self) -> list[tuple[str, str]]:

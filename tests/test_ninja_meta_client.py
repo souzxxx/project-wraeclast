@@ -2,6 +2,7 @@
 (fetch/run/explore/_main, mocked with respx + monkeypatch — no DB, no live network)."""
 
 import httpx
+import pytest
 import respx
 
 import collector.ninja_meta_client as nmc
@@ -136,6 +137,81 @@ async def test_fetch_popular_builds_aggregates_from_endpoint():
     assert [g["name"] for g in build.gems] == ["Comet", "Frostbolt"]
     # the poe.ninja source is attached so the build-diff can cite where the meta came from
     assert build.sources == [{"url": "https://poe.ninja/poe2/builds", "title": "poe.ninja builds"}]
+
+
+def test_ninja_builds_path_list_dedups_strips_and_orders():
+    s = Settings(ninja_builds_path="/a", ninja_builds_alt_paths="/b, /a ,/c,")
+    # primary first, then alts; whitespace stripped, blanks dropped, /a deduped to one entry.
+    assert s.ninja_builds_path_list == ["/a", "/b", "/c"]
+
+
+@respx.mock
+async def test_fetch_popular_builds_falls_back_to_next_candidate():
+    # the primary route 404s (the live prod symptom) — the fetch must probe the next candidate
+    # instead of failing, and aggregate from whichever one actually returns characters.
+    s = Settings(ninja_builds_path="/poe2/api/builds/overview", ninja_builds_alt_paths="/alt")
+    payload = {"characters": [_char("Witch", "Comet", "Frostbolt") for _ in range(3)]}
+    respx.get("https://poe.ninja/poe2/api/builds/overview").mock(
+        return_value=httpx.Response(404)
+    )
+    alt = respx.get("https://poe.ninja/alt").mock(return_value=httpx.Response(200, json=payload))
+    builds = await fetch_popular_builds(s)
+    assert alt.called
+    [build] = builds
+    assert build.char_class == "Witch"
+    assert [g["name"] for g in build.gems] == ["Comet", "Frostbolt"]
+
+
+@respx.mock
+async def test_fetch_popular_builds_skips_empty_payload_and_uses_next():
+    # a candidate that returns 200 but no characters is not a valid meta source — move on.
+    s = Settings(ninja_builds_path="/first", ninja_builds_alt_paths="/second")
+    respx.get("https://poe.ninja/first").mock(
+        return_value=httpx.Response(200, json={"characters": []})
+    )
+    payload = {"characters": [_char("Monk", "Tempest") for _ in range(3)]}
+    respx.get("https://poe.ninja/second").mock(return_value=httpx.Response(200, json=payload))
+    [build] = await fetch_popular_builds(s)
+    assert build.char_class == "Monk"
+
+
+@respx.mock
+async def test_fetch_popular_builds_raises_when_all_candidates_fail():
+    # every candidate dead -> raise loudly (run_daily surfaces it), never a silent empty meta.
+    s = Settings(ninja_builds_path="/first", ninja_builds_alt_paths="/second")
+    respx.get("https://poe.ninja/first").mock(return_value=httpx.Response(404))
+    respx.get("https://poe.ninja/second").mock(return_value=httpx.Response(500))
+    with pytest.raises(RuntimeError) as exc:
+        await fetch_popular_builds(s)
+    msg = str(exc.value)
+    assert "/first" in msg and "/second" in msg  # both tried paths named for diagnosis
+
+
+@respx.mock
+async def test_explore_probes_candidates_and_reports_each(monkeypatch, capsys):
+    s = Settings(ninja_builds_path="/first", ninja_builds_alt_paths="/second")
+    monkeypatch.setattr(nmc, "get_settings", lambda: s)
+    respx.get("https://poe.ninja/first").mock(return_value=httpx.Response(404))
+    payload = {"characters": [_char("Witch", "Comet")]}
+    respx.get("https://poe.ninja/second").mock(return_value=httpx.Response(200, json=payload))
+    await explore()
+    out = capsys.readouterr().out
+    assert "/first: ERROR" in out  # the dead candidate is reported, not fatal
+    assert "/second: characters found: 1" in out  # the working candidate + its count
+    assert "Comet" in out  # sample dumped from the first hit
+
+
+@respx.mock
+async def test_explore_reports_when_no_candidate_returns_characters(monkeypatch, capsys):
+    s = Settings(ninja_builds_path="/only", ninja_builds_alt_paths="")
+    monkeypatch.setattr(nmc, "get_settings", lambda: s)
+    respx.get("https://poe.ninja/only").mock(
+        return_value=httpx.Response(200, json={"characters": []})
+    )
+    await explore()
+    out = capsys.readouterr().out
+    assert "/only: characters found: 0" in out
+    assert "no candidate builds endpoint returned characters" in out
 
 
 @respx.mock
