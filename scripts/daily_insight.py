@@ -34,6 +34,13 @@ PRICE_MOVE_MIN_PCT = 25.0
 # Absolute floor to kill micro-noise. PoE2 prices are divine-denominated (~0.001–1 div for most
 # currencies, Divine = 1.0), so this is a divine-scaled value, not chaos.
 PRICE_MOVE_MIN_VALUE = 0.02
+# Baseline floor: a percentage move is only meaningful when YESTERDAY's price was itself a real,
+# tradeable value. Below this, day-over-day % is dominated by thin liquidity and missing-data
+# artifacts — when a whole poe.ninja category collects as ~0 one day and real the next, every
+# item in it reads as a phantom "+thousands%" jump, flooding the Anomalies section and burying
+# the genuine signal. Gating on the OLD value leaves real crashes (large base → ~0) untouched;
+# it only drops explosions OFF a near-zero base. (Live: the 2026-07-18 report had 30+ such lines.)
+PRICE_MOVE_MIN_BASE = 0.1
 PRICE_ANOMALY_PCT = 50.0
 TOP_N = 5
 
@@ -189,7 +196,9 @@ def notable_price_moves(
         if old_row is None or now_val is None:
             continue
         old_val = _row_value(old_row)
-        if not old_val or old_val <= 0:
+        # Skip div-by-zero AND near-zero baselines: below the floor the % is noise, not signal
+        # (a category that collected as ~0 yesterday would otherwise flood with phantom jumps).
+        if not old_val or old_val < PRICE_MOVE_MIN_BASE:
             continue
         pct = (now_val - old_val) / old_val * 100.0
         if abs(pct) >= PRICE_MOVE_MIN_PCT and abs(now_val - old_val) >= PRICE_MOVE_MIN_VALUE:

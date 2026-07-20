@@ -141,6 +141,40 @@ def test_price_moves_sorted_by_magnitude():
     assert [m.name for m in moves] == ["Down", "Up"]  # -90% beats +40%
 
 
+def test_price_moves_suppress_near_zero_baseline_explosion():
+    # Regression: the 2026-07-18 report's Anomalies section was flooded with 30+ phantom
+    # "+49921%" lines — a whole poe.ninja category (essences) collected as ~0 one day and real
+    # the next, so every item read as an astronomical jump off a near-zero baseline. The abs-move
+    # floor (0.02) does NOT catch these because the jump itself is large (~1 div). Gate on the
+    # baseline: a % move off a sub-0.1-div (chaff / thin-liquidity / missing-data) price is noise.
+    latest = [
+        _price("PhantomEssence", 1.17, T1),  # 0.001 -> 1.17 div = +116900% off ~0 -> suppressed
+        _price("RealCurrency", 0.77, T1),    # 0.25 -> 0.77 div = +208% off a real base -> kept
+    ]
+    prev = [_price("PhantomEssence", 0.001, T0), _price("RealCurrency", 0.25, T0)]
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["RealCurrency"]
+    assert moves[0].pct == 208.0
+
+
+def test_price_moves_keep_crash_from_real_baseline():
+    # The baseline gate is on the OLD value, so a genuine crash (real base collapsing toward ~0)
+    # still surfaces — that asymmetry is deliberate: "X crashed" is signal, "chaff spiked" is not.
+    latest = [_price("Crashed", 0.01, T1)]
+    prev = [_price("Crashed", 1.0, T0)]  # 1.0 -> 0.01 div = -99% off a real base -> kept
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["Crashed"]
+    assert moves[0].pct == -99.0
+
+
+def test_price_moves_baseline_floor_boundary():
+    # Exactly at the floor is kept; just below is dropped (defensive against off-by-one drift).
+    latest = [_price("AtFloor", 1.0, T1), _price("BelowFloor", 1.0, T1)]
+    prev = [_price("AtFloor", 0.1, T0), _price("BelowFloor", 0.099, T0)]
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["AtFloor"]
+
+
 # ── compute_insight (integration of the pieces) ──────────────────────────────────────
 
 def test_compute_insight_flags_anomalies_and_baseline():
