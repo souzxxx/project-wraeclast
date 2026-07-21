@@ -81,6 +81,22 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-20** — P1 anomaly quality: stop the daily insight's **Anomalies section from flooding**
+  with phantom price jumps. The live 2026-07-18 report carried 30+ lines like "Lesser Essence of
+  Seeking jumped +49921% (0.0 → 1.17 div)" — a whole poe.ninja category (essences) collected as
+  ~0 one day and real the next, so every item read as an astronomical jump OFF a near-zero
+  baseline, burying the genuine signal (real farm churn + true currency moves) the anomaly flag
+  exists to surface. Root cause: `notable_price_moves` gated only on the relative % (25%) and the
+  ABSOLUTE move (0.02 div) — neither catches a ~0 → 1.17 jump, since the move itself is large
+  (~1 div); the percentage explodes precisely because the denominator is ~0. Added a third,
+  principled guard — `PRICE_MOVE_MIN_BASE = 0.1` div — that requires YESTERDAY's price to be a
+  real, tradeable value before a percentage move counts. The gate is on the OLD value only, so it
+  is deliberately asymmetric: genuine crashes (real base collapsing toward ~0, e.g. 1.0 → 0.05,
+  −95%) still surface, while spikes off chaff/thin-liquidity/missing-data baselines are dropped —
+  which is exactly what a "category filled in overnight" artifact looks like. +4 offline
+  regression tests (the near-zero explosion suppressed while a real +208% move survives; a crash
+  from a real base kept; the floor boundary at/just-below 0.1). One-parameter change; no schema,
+  no league/secret hardcoding; existing thresholds untouched. ruff clean; `pytest -q` 350 → 353.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
