@@ -81,6 +81,29 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-21** — P0 health: stop `meta_builds` from **hard-404-ing every daily run**. The
+  2026-07-06 note flagged `step meta_builds FAILED: 404` on the unconfirmed PoE2 builds route as
+  still failing in production but "out of scope — needs a live `explore` run to find the right
+  route." The exact route still can't be pinned offline, but the collector no longer has to
+  bet the whole step on one guessed path: `fetch_popular_builds` now resolves across an ordered,
+  de-duplicated candidate list (new `_resolve_builds_payload`) and uses the FIRST path that
+  responds 200 — self-healing across plausible poe.ninja routes, exactly how the economy/profile
+  clients were bootstrapped (skill §2b: validate with a GET, parse defensively). Config gains
+  `ninja_builds_fallback_paths` (comma-separated, env-overridable, default `.../builds/0/overview`
+  mirroring the CONFIRMED economy path's `/0/overview` segment) + the ordered/de-duped
+  `ninja_builds_path_list` property, so once `explore` pins the real route the owner drops it in
+  with no code change. The P0 no-silent-failure contract is preserved: only when EVERY candidate
+  errors does it raise `BuildsEndpointError` naming each tried path (so the step still goes red
+  with an actionable annotation), while a 200-with-empty response counts as "endpoint found" and
+  degrades gracefully to no builds. `explore` now probes every candidate in order, printing each
+  failing attempt and dumping the first that responds — turning the owner's live route-finding
+  into one command. +7 offline tests (350 → 357): primary-404 → fallback aggregates,
+  primary-ok short-circuits the fallback, all-candidates-error raises listing the paths,
+  empty-200 counts as found, the path-list ordering/dedup property, and both `explore` branches.
+  ruff clean. No league/secret hardcoded; `/build` still degrades to "not comparable" when no
+  route responds. **Caveat:** if all candidates 404 in production, the step still (correctly) goes
+  red — a live `explore` against the deploy is still the way to confirm the true route and set it
+  via `NINJA_BUILDS_PATH` / `NINJA_BUILDS_FALLBACK_PATHS`.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand

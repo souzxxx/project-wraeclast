@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
     # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
     ninja_builds_path: str = "/poe2/api/builds/overview"
+    # Extra candidate builds paths, tried IN ORDER after the primary — the first that responds 200
+    # wins and its shape is aggregated defensively. Since the primary route is unconfirmed (and has
+    # been 404-ing), this lets the collector self-heal across plausible poe.ninja routes instead of
+    # hard-failing on one guess; `.../0/overview` mirrors the CONFIRMED economy path's segment.
+    # Comma-separated and env-overridable, so once `explore` pins the real route the owner sets it
+    # here with no code change. Empty = try only the primary.
+    ninja_builds_fallback_paths: str = "/poe2/api/builds/0/overview"
     ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
     ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
 
@@ -99,6 +106,17 @@ class Settings(BaseSettings):
     @property
     def rss_feed_list(self) -> list[str]:
         return [f.strip() for f in self.rss_feeds.split(",") if f.strip()]
+
+    @property
+    def ninja_builds_path_list(self) -> list[str]:
+        """Ordered, de-duplicated candidate builds paths: the primary first, then any fallbacks.
+        The meta collector tries them in this order and uses the first that responds."""
+        out: list[str] = []
+        for path in [self.ninja_builds_path, *self.ninja_builds_fallback_paths.split(",")]:
+            path = path.strip()
+            if path and path not in out:
+                out.append(path)
+        return out
 
     @property
     def ninja_economy_category_list(self) -> list[tuple[str, str]]:
