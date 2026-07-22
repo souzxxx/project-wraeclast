@@ -34,7 +34,19 @@ PRICE_MOVE_MIN_PCT = 25.0
 # Absolute floor to kill micro-noise. PoE2 prices are divine-denominated (~0.001–1 div for most
 # currencies, Divine = 1.0), so this is a divine-scaled value, not chaos.
 PRICE_MOVE_MIN_VALUE = 0.02
+# Baseline floor: a percentage move is only meaningful when the *previous* price was itself a real,
+# tradeable value. An item thinly-priced yesterday (e.g. 0.001 div, which rounds to 0.0 in the
+# report) rising to 0.38 div is a listing/liquidity event, not a price move — but the naive
+# `(now - old) / old` renders it as "+21601%" and floods the anomaly section with dozens of such
+# noise entries (drowning the genuine signal). Requiring the baseline to clear this floor keeps
+# the report to moves between prices that actually meant something. Same divine scale as above.
+PRICE_MOVE_MIN_BASELINE = 0.02
 PRICE_ANOMALY_PCT = 50.0
+# The Anomalies block is a scannable alert digest, not an exhaustive dump. PoE2 prices ~450 items
+# and, in a volatile economy, dozens legitimately clear ±50% every day — listing them all buries
+# the few that matter. Cap the digest to the biggest movers (price_moves is already sorted by
+# magnitude) and point at "Notable price moves" for the tail, so nothing is silently hidden.
+MAX_PRICE_ANOMALIES = 8
 TOP_N = 5
 
 
@@ -191,6 +203,10 @@ def notable_price_moves(
         old_val = _row_value(old_row)
         if not old_val or old_val <= 0:
             continue
+        # Skip percentage moves off a near-zero baseline — they explode to meaningless
+        # thousands-of-percent readings and flood the anomaly section (see PRICE_MOVE_MIN_BASELINE).
+        if old_val < PRICE_MOVE_MIN_BASELINE:
+            continue
         pct = (now_val - old_val) / old_val * 100.0
         if abs(pct) >= PRICE_MOVE_MIN_PCT and abs(now_val - old_val) >= PRICE_MOVE_MIN_VALUE:
             moves.append(
@@ -243,13 +259,20 @@ def compute_insight(
         anomalies.append(f"Farm entered top {TOP_N}: {name}")
     for name in left:
         anomalies.append(f"Farm left top {TOP_N}: {name}")
-    for m in price_moves:
-        if abs(m.pct) >= PRICE_ANOMALY_PCT:
-            direction = "jumped" if m.pct > 0 else "dropped"
-            anomalies.append(
-                f"{m.name} {direction} {m.pct:+.0f}% "
-                f"({m.from_chaos} → {m.to_chaos} div)"
-            )
+    # price_moves is sorted by magnitude desc, so the first are the biggest swings.
+    price_anomalies = [
+        f"{m.name} {'jumped' if m.pct > 0 else 'dropped'} {m.pct:+.0f}% "
+        f"({m.from_chaos} → {m.to_chaos} div)"
+        for m in price_moves
+        if abs(m.pct) >= PRICE_ANOMALY_PCT
+    ]
+    anomalies.extend(price_anomalies[:MAX_PRICE_ANOMALIES])
+    overflow = len(price_anomalies) - MAX_PRICE_ANOMALIES
+    if overflow > 0:
+        anomalies.append(
+            f"…and {overflow} more price move(s) past ±{PRICE_ANOMALY_PCT:.0f}% "
+            "(see Notable price moves)"
+        )
     for a in alerts:
         if a.kind == "into_profit":
             anomalies.append(f"Craft crossed into profit: {a.name} (ROI now {a.to_roi}%)")
