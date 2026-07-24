@@ -2,12 +2,14 @@
 (fetch/run/explore/_main, mocked with respx + monkeypatch — no DB, no live network)."""
 
 import httpx
+import pytest
 import respx
 
 import collector.ninja_meta_client as nmc
 from api.build_diff import compute_build_diff
 from collector.config import Settings
 from collector.ninja_meta_client import (
+    MetaBuildsUnavailable,
     _char_class,
     _char_gems,
     _main,
@@ -145,6 +147,42 @@ async def test_fetch_popular_builds_truncates_to_max_chars():
     respx.get(BUILDS_URL).mock(return_value=httpx.Response(200, json=payload))
     [build] = await fetch_popular_builds(Settings(ninja_meta_max_chars=3))
     assert build.sample_size == 3
+
+
+@respx.mock
+@pytest.mark.parametrize("status", [403, 404])
+async def test_fetch_popular_builds_unavailable_endpoint_raises(status):
+    # poe.ninja publishes no public PoE2 builds API — a 403/404 is an expected "no data"
+    # condition, surfaced as MetaBuildsUnavailable (not a raw HTTPStatusError) so run() can skip.
+    route = respx.get(BUILDS_URL).mock(return_value=httpx.Response(status))
+    with pytest.raises(MetaBuildsUnavailable) as excinfo:
+        await fetch_popular_builds(Settings())
+    assert route.called
+    assert str(status) in str(excinfo.value)
+
+
+@respx.mock
+async def test_fetch_popular_builds_propagates_other_http_errors():
+    # a transient 500 is a real failure and must NOT be swallowed as "unavailable".
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(500))
+    with pytest.raises(httpx.HTTPStatusError):
+        await fetch_popular_builds(Settings())
+
+
+async def test_run_skips_and_stays_green_when_unavailable(monkeypatch, capsys):
+    # the daily step must stay green (return 0) and NOT touch the DB when there's no build data.
+    async def fake_fetch(settings):
+        raise MetaBuildsUnavailable("builds endpoint /x returned 404 (no public poe.ninja ...)")
+
+    replace_called: list = []
+    monkeypatch.setattr(nmc, "fetch_popular_builds", fake_fetch)
+    monkeypatch.setattr(
+        "db.repo.replace_meta_builds",
+        lambda league, b: replace_called.append((league, b)) or len(b),
+    )
+    assert await run() == 0
+    assert replace_called == []  # no write attempted → stored meta (if any) is not clobbered
+    assert "meta_build: skipped" in capsys.readouterr().out
 
 
 async def test_run_writes_meta_builds(monkeypatch, capsys):
