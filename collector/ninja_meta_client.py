@@ -18,15 +18,24 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 from collections import Counter, defaultdict
 from typing import Any
+
+import httpx
 
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
 from db.models import MetaBuild
 
 CACHE_TTL = 6 * 3600  # builds ladder is a daily-ish snapshot; don't hammer (skill §1).
+
+log = logging.getLogger("ninja_meta")
+
+
+class BuildsEndpointError(RuntimeError):
+    """Every configured builds path errored — no PoE2 builds route responded."""
 
 
 def extract_characters(payload: Any) -> list[dict[str, Any]]:
@@ -118,14 +127,30 @@ def aggregate_meta_builds(
     return out
 
 
+async def _resolve_builds_payload(http: HttpClient, settings: Settings) -> tuple[str, Any]:
+    """Try each candidate builds path in order; return (path, payload) for the FIRST that
+    responds 200. The PoE2 builds route is unconfirmed, so this self-heals across the plausible
+    routes instead of hard-failing on a single 404 (skill §2b: validate with a GET, parse
+    defensively). Raises `BuildsEndpointError` only when EVERY candidate errored, so a real
+    outage is still surfaced as a failed step — never silently swallowed (ROADMAP P0)."""
+    attempts: list[str] = []
+    for path in settings.ninja_builds_path_list:
+        try:
+            payload = await http.get_json(
+                path, params={"league": settings.poe2_league}, cache_ttl=CACHE_TTL
+            )
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            attempts.append(f"{path} -> {type(exc).__name__}: {exc}")
+            continue
+        log.info("meta_build: builds endpoint %s responded 200", path)
+        return path, payload
+    raise BuildsEndpointError("no builds endpoint responded; tried: " + "; ".join(attempts))
+
+
 async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
     settings = settings or get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await http.get_json(
-            settings.ninja_builds_path,
-            params={"league": settings.poe2_league},
-            cache_ttl=CACHE_TTL,
-        )
+        _path, payload = await _resolve_builds_payload(http, settings)
     chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
     source = {"url": settings.ninja_base_url + "/poe2/builds", "title": "poe.ninja builds"}
     return aggregate_meta_builds(
@@ -145,15 +170,22 @@ async def run() -> int:
 
 
 async def explore() -> None:
-    """GET the configured builds endpoint and dump raw JSON — confirm shape before modeling."""
+    """Probe each candidate builds path in order and dump the FIRST that responds — the PoE2
+    route is unconfirmed, so this is how the owner pins the real one in the deploy. Failing
+    candidates are printed too, so an all-404 result shows exactly what was tried."""
     settings = get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        data = await http.get_json(
-            settings.ninja_builds_path, params={"league": settings.poe2_league}
-        )
-    chars = extract_characters(data)
-    print(f"characters found: {len(chars)}")
-    print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
+        for path in settings.ninja_builds_path_list:
+            try:
+                data = await http.get_json(path, params={"league": settings.poe2_league})
+            except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+                print(f"  {path} -> {type(exc).__name__}: {exc}")
+                continue
+            chars = extract_characters(data)
+            print(f"OK {path} -> characters found: {len(chars)}")
+            print(json.dumps(chars[:3], indent=2, ensure_ascii=False)[:4000])
+            return
+    print("no builds endpoint responded across candidates")
 
 
 def _main(argv: list[str]) -> int:
