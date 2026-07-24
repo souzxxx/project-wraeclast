@@ -11,7 +11,9 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 - [ ] `ruff check .` and `pytest -q` are green; if not, fix the breakage.
 - [ ] No daily-collection step is silently failing (check the latest GitHub Actions run / logs).
       _(now enforced, not just eyeballed: `run_daily` exits non-zero + emits Actions annotations
-      when any step fails, so a swallowed collector error goes red instead of silently green — see Done 2026-07-04.)_
+      when any step fails, so a swallowed collector error goes red instead of silently green — see Done 2026-07-04.
+      The `meta_builds` step no longer forces every daily run red: poe.ninja has no public PoE2
+      builds API, so its 403/404 is now handled as an expected "no data" condition — see Done 2026-07-24.)_
 - [ ] No secret committed; `.env` stays gitignored.
 
 ## P1 — Daily intelligence layer
@@ -81,6 +83,26 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-24** — P0 health: stop `meta_builds` from failing **every single daily run** red. Since
+  the `/build` meta source shipped (2026-06-22), `ninja_meta_client.run` has 404'd on
+  `poe.ninja/poe2/api/builds/overview` on every run — the 2026-07-06 note flagged it as needing
+  live endpoint exploration. Research settles it: poe.ninja publishes public PoE2 **economy**
+  endpoints but **no public builds/profiles API** (it's closed to third parties — significantly
+  more expensive to serve), so there is no correct path to point the config at; the endpoint can't
+  be reached from the offline cloud session either (network policy blocks poe.ninja). So a 403/404
+  there is an expected "no public build data" condition, **not** a collector failure — yet it was
+  the sole reason the daily run went red every day for ~5 weeks, eroding the very "red X = something
+  needs attention" signal the 2026-07-04 fail-loud design created (a permanent red desensitizes the
+  owner, so the next *critical* break hides in the noise). Fix mirrors the codebase's own
+  `ninja_build_client.CharacterNotOnLadder` precedent: `fetch_popular_builds` now raises a new
+  `MetaBuildsUnavailable` on a 403/404 from the builds endpoint (any other status — 5xx, 429,
+  network — still propagates as a real failure), and `run` catches it, **skips the DB write** (so
+  no stored meta is clobbered) and returns 0, keeping the step green. The `/build` diff already
+  degrades gracefully when no meta is stored, and the whole fetch/aggregate machinery stays in place
+  so a future real build-data source (GGG OAuth / PoB imports) plugs straight in. +4 offline tests
+  (350 → 354): the 403/404 → `MetaBuildsUnavailable` path (parametrized), a 500 still propagating,
+  and `run` staying green + writing nothing when unavailable. ruff clean. One collector module
+  touched; no schema change, no league/endpoint hardcoding.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
