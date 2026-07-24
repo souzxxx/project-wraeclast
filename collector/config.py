@@ -71,6 +71,15 @@ class Settings(BaseSettings):
     # and validated in the deploy with `python -m collector.ninja_meta_client explore`, like the
     # other ninja endpoints were bootstrapped. Aggregation is league-param driven, never hardcoded.
     ninja_builds_path: str = "/poe2/api/builds/overview"
+    # Candidate builds paths for the `discover` CLI to probe when the configured one 404s (the
+    # PoE2 builds route is still unconfirmed — it's been failing the daily `meta_builds` step).
+    # These are GUESSES modelled on poe.ninja's other PoE2 routes (economy uses a `/0/overview`
+    # index; PoE1 builds used `getbuildoverview`); the configured `ninja_builds_path` is always
+    # probed too. Override via env to add your own candidates without a code change.
+    ninja_builds_path_candidates: str = (
+        "/poe2/api/builds/overview,/poe2/api/builds/0/overview,/poe2/api/build/overview,"
+        "/poe2/api/data/0/getbuildoverview,/poe2/api/character/overview,/poe2/api/builds"
+    )
     ninja_meta_max_chars: int = 200  # cap how many ladder characters feed the aggregate
     ninja_meta_min_usage: float = 0.15  # keep gems used by ≥15% of a class's sample
 
@@ -99,6 +108,16 @@ class Settings(BaseSettings):
     @property
     def rss_feed_list(self) -> list[str]:
         return [f.strip() for f in self.rss_feeds.split(",") if f.strip()]
+
+    @property
+    def ninja_builds_path_candidate_list(self) -> list[str]:
+        """Distinct builds paths to probe in `discover`, configured path first, order preserved."""
+        ordered: list[str] = []
+        for path in [self.ninja_builds_path, *self.ninja_builds_path_candidates.split(",")]:
+            path = path.strip()
+            if path and path not in ordered:
+                ordered.append(path)
+        return ordered
 
     @property
     def ninja_economy_category_list(self) -> list[tuple[str, str]]:

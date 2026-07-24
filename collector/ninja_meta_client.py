@@ -10,8 +10,9 @@ deploy with `explore`, exactly like ninja_client / ninja_build_client were boots
 §1/§2b: never hardcode the league/endpoint, validate with a GET, parse defensively).
 
 CLI:
-    python -m collector.ninja_meta_client explore   # dump the raw builds payload, no DB writes
-    python -m collector.ninja_meta_client run        # aggregate per class + write meta_build
+    python -m collector.ninja_meta_client explore    # dump the raw builds payload, no DB writes
+    python -m collector.ninja_meta_client discover    # probe candidate paths, report which works
+    python -m collector.ninja_meta_client run         # aggregate per class + write meta_build
 """
 
 from __future__ import annotations
@@ -21,6 +22,8 @@ import json
 import sys
 from collections import Counter, defaultdict
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
@@ -133,6 +136,77 @@ async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBui
     )
 
 
+# ── endpoint discovery ──────────────────────────────────────────────────────────────
+# The daily `meta_builds` step has been failing on a 404 because the PoE2 builds route is
+# unconfirmed. `discover` probes the candidate paths (config-driven) and reports which one
+# actually returns characters, so the owner can set NINJA_BUILDS_PATH to it — self-service
+# diagnosis instead of editing code and guessing one path at a time. The probing is defensive
+# (a per-candidate failure is recorded, never fatal) and the selection is pure/offline-tested.
+
+
+class ProbeResult(BaseModel):
+    path: str
+    char_count: int = 0
+    error: str | None = None
+
+
+class DiscoveryResult(BaseModel):
+    chosen_path: str | None = None
+    attempts: list[ProbeResult] = Field(default_factory=list)
+
+
+def pick_working_endpoint(attempts: list[ProbeResult]) -> str | None:
+    """First probed path that returned at least one character (order = probe order). Pure."""
+    for attempt in attempts:
+        if attempt.error is None and attempt.char_count > 0:
+            return attempt.path
+    return None
+
+
+async def discover_builds_path(settings: Settings | None = None) -> DiscoveryResult:
+    """Probe each candidate builds path and report which returns a character list.
+
+    Defensive: a candidate that 404s / errors / returns no characters is recorded and the probe
+    moves on (one bad guess never aborts the sweep), mirroring how ninja_client tolerates a single
+    failing economy category. Does NOT touch the DB or the daily `run()` path."""
+    settings = settings or get_settings()
+    attempts: list[ProbeResult] = []
+    async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
+        for path in settings.ninja_builds_path_candidate_list:
+            try:
+                payload = await http.get_json(path, params={"league": settings.poe2_league})
+            except Exception as exc:  # noqa: BLE001 — any failure just disqualifies this candidate
+                attempts.append(ProbeResult(path=path, error=f"{type(exc).__name__}: {exc}"))
+                continue
+            attempts.append(ProbeResult(path=path, char_count=len(extract_characters(payload))))
+    return DiscoveryResult(chosen_path=pick_working_endpoint(attempts), attempts=attempts)
+
+
+def render_discovery(result: DiscoveryResult) -> str:
+    """Human-readable probe report + the actionable next step. Pure."""
+    lines = ["poe.ninja PoE2 builds endpoint discovery:", ""]
+    for a in result.attempts:
+        if a.error is not None:
+            lines.append(f"  ✗ {a.path} — {a.error}")
+        elif a.char_count > 0:
+            lines.append(f"  ✅ {a.path} — {a.char_count} characters")
+        else:
+            lines.append(f"  ∅ {a.path} — reachable but no characters found")
+    lines.append("")
+    if result.chosen_path:
+        lines.append(f"Set NINJA_BUILDS_PATH to: {result.chosen_path}")
+    else:
+        lines.append(
+            "No candidate returned characters. Add more guesses via NINJA_BUILDS_PATH_CANDIDATES "
+            "or inspect poe.ninja/poe2/builds network calls manually."
+        )
+    return "\n".join(lines)
+
+
+async def discover() -> None:
+    print(render_discovery(await discover_builds_path()))
+
+
 async def run() -> int:
     from db.repo import replace_meta_builds
 
@@ -160,6 +234,9 @@ def _main(argv: list[str]) -> int:
     cmd = argv[1] if len(argv) > 1 else "run"
     if cmd == "explore":
         asyncio.run(explore())
+        return 0
+    if cmd == "discover":
+        asyncio.run(discover())
         return 0
     if cmd == "run":
         asyncio.run(run())

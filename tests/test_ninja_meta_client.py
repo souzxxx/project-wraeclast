@@ -8,13 +8,19 @@ import collector.ninja_meta_client as nmc
 from api.build_diff import compute_build_diff
 from collector.config import Settings
 from collector.ninja_meta_client import (
+    DiscoveryResult,
+    ProbeResult,
     _char_class,
     _char_gems,
     _main,
     aggregate_meta_builds,
+    discover,
+    discover_builds_path,
     explore,
     extract_characters,
     fetch_popular_builds,
+    pick_working_endpoint,
+    render_discovery,
     run,
 )
 
@@ -172,6 +178,99 @@ async def test_explore_dumps_character_count_and_sample(capsys):
     out = capsys.readouterr().out
     assert "characters found: 2" in out
     assert "Comet" in out  # first chars sampled into the JSON dump
+
+
+def test_pick_working_endpoint_first_with_characters_wins():
+    attempts = [
+        ProbeResult(path="/a", error="HTTPStatusError: 404"),
+        ProbeResult(path="/b", char_count=0),  # reachable but empty -> not chosen
+        ProbeResult(path="/c", char_count=42),
+        ProbeResult(path="/d", char_count=99),  # later match ignored, order wins
+    ]
+    assert pick_working_endpoint(attempts) == "/c"
+
+
+def test_pick_working_endpoint_none_when_nothing_qualifies():
+    attempts = [
+        ProbeResult(path="/a", error="boom"),
+        ProbeResult(path="/b", char_count=0),
+    ]
+    assert pick_working_endpoint(attempts) is None
+
+
+@respx.mock
+async def test_discover_builds_path_probes_candidates_and_picks_working(monkeypatch):
+    # candidate order: configured path first (404s), then the working alt.
+    settings = Settings(
+        ninja_builds_path="/poe2/api/builds/overview",
+        ninja_builds_path_candidates="/poe2/api/builds/alt",
+    )
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    respx.get("https://poe.ninja/poe2/api/builds/alt").mock(
+        return_value=httpx.Response(200, json={"characters": [_char("Witch", "Comet")] * 3})
+    )
+    result = await discover_builds_path(settings)
+    assert result.chosen_path == "/poe2/api/builds/alt"
+    # both candidates were probed; the 404 is recorded as an error, not fatal to the sweep.
+    assert [a.path for a in result.attempts] == [
+        "/poe2/api/builds/overview",
+        "/poe2/api/builds/alt",
+    ]
+    assert result.attempts[0].error is not None and result.attempts[0].char_count == 0
+    assert result.attempts[1].error is None and result.attempts[1].char_count == 3
+
+
+@respx.mock
+async def test_discover_builds_path_none_when_all_fail():
+    settings = Settings(
+        ninja_builds_path="/poe2/api/builds/overview",
+        ninja_builds_path_candidates="/poe2/api/builds/alt",
+    )
+    respx.get(BUILDS_URL).mock(return_value=httpx.Response(404))
+    # reachable but no characters -> disqualified just like an error.
+    respx.get("https://poe.ninja/poe2/api/builds/alt").mock(
+        return_value=httpx.Response(200, json={"characters": []})
+    )
+    result = await discover_builds_path(settings)
+    assert result.chosen_path is None
+    assert result.attempts[1].error is None and result.attempts[1].char_count == 0
+
+
+def test_render_discovery_reports_each_attempt_and_next_step():
+    result_ok = render_discovery(
+        DiscoveryResult(
+            chosen_path="/poe2/api/builds/alt",
+            attempts=[
+                ProbeResult(path="/poe2/api/builds/overview", error="HTTPStatusError: 404"),
+                ProbeResult(path="/poe2/api/builds/alt", char_count=7),
+                ProbeResult(path="/poe2/api/x", char_count=0),
+            ],
+        )
+    )
+    assert "✗ /poe2/api/builds/overview" in result_ok
+    assert "✅ /poe2/api/builds/alt — 7 characters" in result_ok
+    assert "∅ /poe2/api/x" in result_ok
+    assert "Set NINJA_BUILDS_PATH to: /poe2/api/builds/alt" in result_ok
+
+    result_none = render_discovery(DiscoveryResult(chosen_path=None, attempts=[]))
+    assert "No candidate returned characters" in result_none
+
+
+@respx.mock
+async def test_discover_cli_prints_report(capsys):
+    # exercises the thin discover() wrapper end to end against the default candidate list.
+    respx.get(url__startswith="https://poe.ninja/poe2/api/").mock(
+        return_value=httpx.Response(404)
+    )
+    await discover()
+    out = capsys.readouterr().out
+    assert "endpoint discovery" in out
+    assert "No candidate returned characters" in out
+
+
+def test_main_dispatches_discover(monkeypatch):
+    monkeypatch.setattr(nmc.asyncio, "run", lambda coro: coro.close())
+    assert _main(["prog", "discover"]) == 0
 
 
 def test_main_dispatches_run(monkeypatch):

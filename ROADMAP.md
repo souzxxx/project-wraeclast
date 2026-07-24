@@ -81,6 +81,26 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-23** — P0 health: make the **`meta_builds` daily-collection failure self-diagnosing**.
+  The `meta_builds` step has 404'd every run since the 2026-07-06 note flagged it — poe.ninja's
+  PoE2 builds route is still unconfirmed, so the `/build` feature stays degraded to "not
+  comparable". The blocker was diagnosis: the only tool was `explore`, which dumps **one**
+  hardcoded path, so confirming the real route meant editing code and re-running one guess at a
+  time. This cloud session can't probe poe.ninja (network policy blocks it) and the endpoint
+  can't be verified offline, so rather than guess a new default I shipped the **discovery** the
+  owner can run where poe.ninja _is_ reachable (their Mac, or a GitHub Actions dispatch):
+  `python -m collector.ninja_meta_client discover` probes a config-driven candidate list
+  (`ninja_builds_path_candidates`, env-overridable; the configured `ninja_builds_path` is always
+  probed first) and reports which path actually returns characters — `✅ <path> — N characters` /
+  `✗ <path> — <error>` / `∅ reachable but empty` — then prints the exact `NINJA_BUILDS_PATH=<path>`
+  to set. The probe is defensive (a per-candidate 404/error is recorded, never aborts the sweep,
+  mirroring how `ninja_client` tolerates one failing economy category) and the selection
+  (`pick_working_endpoint`) + report (`render_discovery`) are pure and fully offline-tested with
+  respx. **Does not touch the daily `run()` path and does not mask the failure** — the step stays
+  red until the owner confirms and sets the real path; this only turns "edit-and-guess" into
+  self-service. No schema/league hardcoding. +7 offline tests (350 → 357); ruff clean. (The live
+  confirmation of the winning path still happens off-session, exactly like the other ninja
+  endpoints were bootstrapped.)
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand
