@@ -81,6 +81,25 @@ branch, runs ruff + pytest, opens a PR, and checks the item off here in that sam
 
 ### Done (agent appends here)
 <!-- The nightly agent moves completed items here with the PR number + date. -->
+- **2026-07-22** — P1 anomaly quality: de-flood the daily "Anomalies" digest, which had degraded
+  into an unreadable wall — every insight report since 2026-07-07 carried **30–70 price-anomaly
+  lines** (e.g. 63 on 2026-07-17), burying the few that matter. Two coupled defects in
+  `scripts/daily_insight.notable_price_moves` / `compute_insight`: **(1)** the move floors gated the
+  *magnitude* of the swing (`PRICE_MOVE_MIN_VALUE`) but never the **baseline**, so an item thinly
+  priced yesterday (≈0.001 div, rendering as `0.0`) rising to a real price produced garbage like
+  `Lesser Essence of Enhancement jumped +21601% (0.0 → 0.38 div)` — a listing/liquidity event, not
+  a price move — and ~20% of every day's anomalies were these meaningless five-digit percentages
+  (12 of 63 on 2026-07-17). Added `PRICE_MOVE_MIN_BASELINE = 0.02` (same divine scale as the
+  existing floors): a percentage move is only computed when the *previous* price was itself
+  tradeable. **(2)** even real movers flood — a ~450-item volatile economy legitimately clears
+  ±50% dozens of times a day — yet the digest dumped all of them. Capped it to the top
+  `MAX_PRICE_ANOMALIES = 8` biggest swings (`price_moves` is already magnitude-sorted) with a single
+  `…and N more … (see Notable price moves)` pointer, so the tail is summarized, never silently
+  dropped, and the full list still lives in the "Notable price moves" section. Net on the
+  2026-07-17 report: **63 → 9** anomaly lines. Pure/offline change; no schema, no league hardcoding.
+  +4 regression tests feeding the exact production failure mode (near-zero-baseline flood, the
+  `< floor` boundary kept, end-to-end anomaly count, and the cap + overflow-pointer with the tail
+  preserved in `price_moves`). ruff clean; `pytest -q` 350 → 354.
 - **2026-07-06** — P0 health: fix a daily-collection step that was **silently failing every run**.
   The `daily.yml` job is green (its steps swallow per-collector exceptions and only summarize at
   the end), but the 2026-07-06 run log shows `step daily_insight FAILED: unsupported operand

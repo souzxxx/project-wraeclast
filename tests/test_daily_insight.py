@@ -134,6 +134,68 @@ def test_price_moves_ignore_missing_baseline_and_zero_old():
     assert notable_price_moves(latest, prev) == []
 
 
+def test_price_moves_ignore_near_zero_baseline_flood():
+    # Regression: an item thinly-priced yesterday (baseline below the noise floor, rendering as
+    # "0.0" in the report) rising to a real price produced "+21601%"-style false anomalies that
+    # flooded the daily insight (dozens per run in production). The move clears the pct and the
+    # absolute-move floors, so only a BASELINE floor filters it. A genuine move off a real
+    # baseline must still be reported.
+    latest = [
+        _price("Thinly Listed", 0.38, T1),   # baseline 0.001 -> "+37900%" noise, must be dropped
+        _price("Real Move", 0.5, T1),         # baseline 0.10 -> a real +400%, must survive
+    ]
+    prev = [_price("Thinly Listed", 0.001, T0), _price("Real Move", 0.10, T0)]
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["Real Move"]
+    # and no absurd percentage leaks into the reported move
+    assert all(abs(m.pct) < 10000 for m in moves)
+
+
+def test_price_moves_keep_move_at_exact_baseline_floor():
+    # Boundary: a baseline exactly at the floor is kept (the guard is strictly `< floor`).
+    latest = [_price("AtFloor", 0.10, T1)]
+    prev = [_price("AtFloor", 0.02, T0)]  # baseline == PRICE_MOVE_MIN_BASELINE
+    moves = notable_price_moves(latest, prev)
+    assert [m.name for m in moves] == ["AtFloor"]
+
+
+def test_compute_insight_anomalies_not_flooded_by_thin_baselines():
+    # End-to-end: a batch of thin-baseline risers (the exact production failure mode) plus one
+    # genuine large move — only the genuine one should surface as a price anomaly.
+    latest = (
+        [_price(f"Essence {i}", 0.3, T1) for i in range(8)]  # all off ~0.001 baselines
+        + [_price("Divine Orb", 3.0, T1)]                    # real 1.0 -> 3.0 (+200%)
+    )
+    prev = (
+        [_price(f"Essence {i}", 0.001, T0) for i in range(8)]
+        + [_price("Divine Orb", 1.0, T0)]
+    )
+    ins = compute_insight("L", [], latest + prev, [], today=date(2026, 6, 19))
+    price_anomalies = [a for a in ins.anomalies if "jumped" in a or "dropped" in a]
+    assert len(price_anomalies) == 1
+    assert "Divine Orb" in price_anomalies[0]
+
+
+def test_compute_insight_caps_price_anomaly_digest():
+    # The anomaly digest must stay scannable: with far more than MAX_PRICE_ANOMALIES big movers,
+    # only the top ones are listed, followed by a single "…and N more" pointer — nothing hidden
+    # silently, and the full set still lives in price_moves / the "Notable price moves" section.
+    from scripts.daily_insight import MAX_PRICE_ANOMALIES
+
+    n = MAX_PRICE_ANOMALIES + 5
+    # each doubles (+100%) off a real baseline; distinct magnitudes so the ordering is stable
+    latest = [_price(f"C{i}", 1.0 + i, T1) for i in range(n)]
+    prev = [_price(f"C{i}", (1.0 + i) / 2, T0) for i in range(n)]
+    ins = compute_insight("L", [], latest + prev, [], today=date(2026, 6, 19))
+    listed = [a for a in ins.anomalies if "jumped" in a or "dropped" in a]
+    overflow = [a for a in ins.anomalies if "more price move" in a]
+    assert len(listed) == MAX_PRICE_ANOMALIES
+    assert overflow == [f"…and {n - MAX_PRICE_ANOMALIES} more price move(s) past ±50% "
+                        "(see Notable price moves)"]
+    # the tail is not lost — every mover is still in price_moves
+    assert len(ins.price_moves) == n
+
+
 def test_price_moves_sorted_by_magnitude():
     latest = [_price("Up", 70, T1), _price("Down", 5, T1)]
     prev = [_price("Up", 50, T0), _price("Down", 50, T0)]
