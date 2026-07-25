@@ -9,6 +9,14 @@ profile (className + skills[{name}]); the exact builds path is config-driven and
 deploy with `explore`, exactly like ninja_client / ninja_build_client were bootstrapped (skill
 §1/§2b: never hardcode the league/endpoint, validate with a GET, parse defensively).
 
+poe.ninja publishes PoE2 *economy* endpoints but NOT a public builds/profiles API (it is closed
+to third parties — see the 2026-07-24 note in ROADMAP), so the configured builds path currently
+answers 403/404. That is an expected "no public build data" condition, not a collector failure:
+we treat it like `ninja_build_client`'s `CharacterNotOnLadder` (raise `MetaBuildsUnavailable`,
+skip the write, keep the daily run green) instead of crashing the whole pipeline. The `/build`
+diff already degrades gracefully when no meta is stored. The fetch/aggregate machinery stays in
+place so a future build-data source (GGG OAuth, PoB imports) can plug straight in.
+
 CLI:
     python -m collector.ninja_meta_client explore   # dump the raw builds payload, no DB writes
     python -m collector.ninja_meta_client run        # aggregate per class + write meta_build
@@ -22,11 +30,25 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any
 
+import httpx
+
 from collector.config import Settings, get_settings
 from collector.http import HttpClient
 from db.models import MetaBuild
 
 CACHE_TTL = 6 * 3600  # builds ladder is a daily-ish snapshot; don't hammer (skill §1).
+
+# HTTP statuses that mean "the builds endpoint isn't available to us" rather than a transient
+# fault: 404 (poe.ninja does not publish a public PoE2 builds API) or 403 (closed to third
+# parties). Anything else (5xx, 429, network) is a real failure and still propagates.
+_UNAVAILABLE_STATUSES = frozenset({403, 404})
+
+
+class MetaBuildsUnavailable(RuntimeError):
+    """Raised when the configured builds endpoint reports it has no public data for us (403/404).
+
+    Mirrors `ninja_build_client.CharacterNotOnLadder`: an expected absence, handled by skipping
+    the write and leaving the daily run green — not a collector error that should fail the run."""
 
 
 def extract_characters(payload: Any) -> list[dict[str, Any]]:
@@ -121,11 +143,19 @@ def aggregate_meta_builds(
 async def fetch_popular_builds(settings: Settings | None = None) -> list[MetaBuild]:
     settings = settings or get_settings()
     async with HttpClient(settings.user_agent, base_url=settings.ninja_base_url) as http:
-        payload = await http.get_json(
-            settings.ninja_builds_path,
-            params={"league": settings.poe2_league},
-            cache_ttl=CACHE_TTL,
-        )
+        try:
+            payload = await http.get_json(
+                settings.ninja_builds_path,
+                params={"league": settings.poe2_league},
+                cache_ttl=CACHE_TTL,
+            )
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in _UNAVAILABLE_STATUSES:
+                raise MetaBuildsUnavailable(
+                    f"builds endpoint {settings.ninja_builds_path} returned "
+                    f"{exc.response.status_code} (no public poe.ninja PoE2 builds API)"
+                ) from exc
+            raise
     chars = extract_characters(payload)[: settings.ninja_meta_max_chars]
     source = {"url": settings.ninja_base_url + "/poe2/builds", "title": "poe.ninja builds"}
     return aggregate_meta_builds(
@@ -137,7 +167,13 @@ async def run() -> int:
     from db.repo import replace_meta_builds
 
     settings = get_settings()
-    builds = await fetch_popular_builds(settings)
+    try:
+        builds = await fetch_popular_builds(settings)
+    except MetaBuildsUnavailable as exc:
+        # No public build data to collect today — skip the write (don't clobber any stored meta)
+        # and keep the daily run green. The /build diff degrades gracefully without meta.
+        print(f"meta_build: skipped — {exc}")
+        return 0
     written = replace_meta_builds(settings.poe2_league, builds)
     classes = ", ".join(f"{b.char_class}({b.sample_size})" for b in builds)
     print(f"meta_build: wrote {written} class builds for league={settings.poe2_league} [{classes}]")
